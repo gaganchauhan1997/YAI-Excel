@@ -80,6 +80,29 @@ Open `http://localhost:3000`, drop **any** input, choose a theme, hit **Generate
 
 ---
 
+## 🚀 90-second deploy to `yexcel.hackknow.com`
+
+The whole stack is one command away:
+
+```bash
+git clone https://github.com/gaganchauhan1997/YAI-Excel.git
+cd YAI-Excel
+bash deploy.sh
+```
+
+The installer walks through Fly.io (backend) → Cloudflare Pages (frontend) → DNS — never echoing or logging a single secret. After the first run, every `git push origin main` auto-deploys both sides via GitHub Actions ([deploy-frontend.yml](.github/workflows/deploy-frontend.yml) + [deploy-backend.yml](.github/workflows/deploy-backend.yml)).
+
+Full guide: [`docs/deploy-yexcel.md`](docs/deploy-yexcel.md).
+
+## What's new in v1.2
+
+- 🛡️ **Production hardening** — slowapi rate limiting, request-ID middleware, structured JSON logging, file-size guard, `/version` + `/metrics` endpoints.
+- 🤖 **Auto-deploy CI** — push to `main` → GitHub Actions deploy frontend to Cloudflare Pages and backend to Fly.io.
+- 🧪 **Test suite** — `pytest` covering Indian formatter, every theme, quality gates, real SUMIFS pivots, and enhancer defaults.
+- 📱 **PWA ready** — install on phone, splash screen, themed status bar, offline-friendly chrome.
+- 🧱 **Governance** — `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue + PR templates.
+- 🧯 **Graceful failure** — branded 404 + runtime-error pages, request IDs surfaced to users for support.
+
 ## What's new in v1.1
 
 - 🪙 **Indian Rupee formatting** — full lakhs/crores grouping (`₹1,23,45,678`) and smart short form (`₹1.23 Cr`) baked into every KPI when you toggle the Indian switch.

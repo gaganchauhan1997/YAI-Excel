@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -36,7 +36,7 @@ class GenerateRequest(BaseModel):
     token: str = Field(..., description="Upload session token from /api/upload")
     theme: str = Field(default="midnight", description="One of: " + ", ".join(list_themes()))
     mode: str = Field(default="enhance", description="rebrand | enhance | redesign (for Excel input)")
-    user_prompt: str | None = Field(default=None, description="Optional extra instructions to merge in")
+    user_prompt: Optional[str] = Field(default=None, description="Optional extra instructions to merge in")
 
 
 @router.post("/generate")

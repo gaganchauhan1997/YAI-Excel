@@ -1,0 +1,21 @@
+{
+  "name": "YAI-Excel — Universal AI Dashboard Generator",
+  "short_name": "YAI-Excel",
+  "description": "Give us anything. Get a dashboard.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F5F1E8",
+  "theme_color": "#FFD300",
+  "orientation": "any",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["productivity", "business", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

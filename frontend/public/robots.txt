@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard/
+Disallow: /files/
+Disallow: /api/
+
+Sitemap: https://yexcel.hackknow.com/sitemap.xml

@@ -1,0 +1,42 @@
+name: 🐛 Bug report
+description: Something in YAI-Excel isn't working
+labels: ["bug", "triage"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear, concise description of the bug.
+      placeholder: When I uploaded a PDF, the build hung at "Running vision audit"...
+    validations:
+      required: true
+  - type: dropdown
+    id: input-type
+    attributes:
+      label: Input type
+      options:
+        - image
+        - video
+        - pdf
+        - excel
+        - csv / tsv / json / xml
+        - prompt
+        - other
+    validations:
+      required: true
+  - type: input
+    id: theme
+    attributes:
+      label: Theme used
+      placeholder: midnight
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error trace
+      render: shell
+      placeholder: Paste any backend logs or browser console errors.
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: v1.2.0 or commit SHA

@@ -1,0 +1,26 @@
+name: ✨ Feature request
+description: Suggest an improvement to YAI-Excel
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you solving?
+      placeholder: I want to generate dashboards from Google Slides screenshots...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      placeholder: Add a Slides parser that follows the PDF pipeline...
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    attributes:
+      label: Scope
+      options:
+        - label: This works on free-tier APIs only
+        - label: Aligns with the YAHAVIS ecosystem principles

@@ -16,9 +16,8 @@ export const metadata: Metadata = {
     type: "website",
   },
   twitter: { card: "summary_large_image", title: "YAI-Excel" },
-  icons: {
-    icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' fill='%23FFD300' stroke='%230A0A0A' stroke-width='6'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-family='Archivo Black' font-size='30' fill='%230A0A0A'%3EY%3C/text%3E%3C/svg%3E",
-  },
+  icons: { icon: "/icon.svg" },
+  manifest: "/manifest.json",
 };
 
 export const viewport = {

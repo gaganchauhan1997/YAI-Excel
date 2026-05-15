@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import uuid
 from pathlib import Path
+from typing import Optional
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -26,9 +27,9 @@ STORAGE = Path(os.getenv("STORAGE_PATH", "./uploads"))
 
 @router.post("/upload")
 async def upload(
-    file: UploadFile | None = File(default=None),
-    text: str | None = Form(default=None),
-    url: str | None = Form(default=None),
+    file: Optional[UploadFile] = File(default=None),
+    text: Optional[str] = Form(default=None),
+    url: Optional[str] = Form(default=None),
 ):
     if not (file or text or url):
         raise HTTPException(status_code=400, detail="Provide a file, text, or url.")
@@ -37,7 +38,7 @@ async def upload(
     session_dir = STORAGE / token
     session_dir.mkdir(parents=True, exist_ok=True)
 
-    saved_path: Path | None = None
+    saved_path: Optional[Path] = None
     if file:
         saved_path = session_dir / file.filename
         async with aiofiles.open(saved_path, "wb") as fh:
