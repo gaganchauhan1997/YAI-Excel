@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu } from "lucide-react";
+import { Menu, Key } from "lucide-react";
 import LanguageToggle from "@/components/neo/LanguageToggle";
 import NeoPill from "@/components/neo/NeoPill";
 import { useI18n } from "@/lib/i18n";
@@ -9,10 +9,14 @@ export default function Topbar({
   onMenu,
   theme,
   model,
+  onKeySettings,
+  hasKeys,
 }: {
   onMenu: () => void;
   theme: string;
   model: string;
+  onKeySettings?: () => void;
+  hasKeys?: boolean;
 }) {
   const { t } = useI18n();
   return (
@@ -28,6 +32,20 @@ export default function Topbar({
         <NeoPill variant="primary" className="hidden sm:inline-flex">{t.studio.themeLabel} · {theme}</NeoPill>
         <NeoPill variant="snow" className="hidden md:inline-flex font-mono">{t.studio.modelLabel} · {model}</NeoPill>
       </div>
+      {onKeySettings && (
+        <button
+          onClick={onKeySettings}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono border-[2px] transition-colors ${
+            hasKeys
+              ? "border-accent bg-accent/10 text-accent"
+              : "border-ink bg-snow text-muted hover:border-accent hover:text-accent"
+          }`}
+          title={hasKeys ? "API keys configured" : "Add free API keys to enable AI"}
+        >
+          <Key size={13} />
+          <span className="hidden sm:inline">{hasKeys ? "Keys ✓" : "Add Keys"}</span>
+        </button>
+      )}
       <LanguageToggle />
     </header>
   );
