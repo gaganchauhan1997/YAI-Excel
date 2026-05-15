@@ -9,8 +9,12 @@ from dataclasses import dataclass
 
 from loguru import logger
 
-from ..ai.ai_router import AIRouter
-from ..ai.audit_prompts import PROMPT_TO_AUDIT
+try:
+    from ai.ai_router import AIRouter
+    from ai.audit_prompts import PROMPT_TO_AUDIT
+except ImportError:  # support both `from backend.parsers...` and `from parsers...`
+    from ..ai.ai_router import AIRouter  # type: ignore
+    from ..ai.audit_prompts import PROMPT_TO_AUDIT  # type: ignore
 
 
 @dataclass

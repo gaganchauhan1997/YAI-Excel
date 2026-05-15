@@ -6,12 +6,14 @@
 
 **Universal AI-powered Excel dashboard generator. Any input → enterprise-grade workbook.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-FFC000.svg)](LICENSE)
-[![Stack](https://img.shields.io/badge/stack-Next.js%2014%20%2B%20FastAPI-6366f1.svg)]()
-[![Free Tier](https://img.shields.io/badge/APIs-Free%20Tier%20First-22d3ee.svg)]()
-[![Built with](https://img.shields.io/badge/Built%20with-YAHAVIS%20AI-7C3AED.svg)](https://github.com/gaganchauhan1997/YahavisAI)
+[![License: MIT](https://img.shields.io/badge/License-MIT-FFD300.svg?style=flat-square)](LICENSE)
+[![Stack](https://img.shields.io/badge/stack-Next.js%2014%20%2B%20FastAPI-0A0A0A.svg?style=flat-square)]()
+[![Free Tier](https://img.shields.io/badge/APIs-Free%20Tier%20First-FF6BCB.svg?style=flat-square)]()
+[![Hindi · हिं](https://img.shields.io/badge/UI-EN%20%C2%B7%20%E0%A4%B9%E0%A4%BF%E0%A4%82-4F7DF3.svg?style=flat-square)]()
+[![INR · ₹](https://img.shields.io/badge/Indian%20%E2%82%B9-Lakhs%20%C2%B7%20Crores-5EE49B.svg?style=flat-square)]()
+[![Built with](https://img.shields.io/badge/Built%20with-YAHAVIS%20AI-7C3AED.svg?style=flat-square)](https://github.com/gaganchauhan1997/YahavisAI)
 
-[**Live demo**](#) · [**Quick start**](#-quick-start) · [**API docs**](docs/api.md) · [**Deployment**](docs/deployment.md)
+[**Live**](https://yexcel.hackknow.com) · [**Quick start**](#-quick-start) · [**Deploy to yexcel.hackknow.com**](docs/deploy-yexcel.md) · [**API docs**](docs/api.md) · [**Curl walkthrough**](docs/curl-walkthrough.md)
 
 </div>
 
@@ -75,6 +77,15 @@ $ docker compose up
 Open `http://localhost:3000`, drop **any** input, choose a theme, hit **Generate**. The `.xlsx` lands in `outputs/`.
 
 ---
+
+## What's new in v1.1
+
+- 🪙 **Indian Rupee formatting** — full lakhs/crores grouping (`₹1,23,45,678`) and smart short form (`₹1.23 Cr`) baked into every KPI when you toggle the Indian switch.
+- 🇮🇳 **Bilingual UI (EN · हिं)** — entire frontend translates between English and Hindi with one click.
+- 🧱 **Neo-brutalist redesign** — thick black borders, hard shadows, chunky display type. LibreChat-grade three-pane layout with collapsible sidebar, chat-style audit stream, and a fused universal input bar.
+- 📐 **Real SUMIFS pivots** — `PivotEngine` now reads the actual source range, computes unique row labels, and emits true `SUMIFS / COUNTIFS / AVERAGEIFS` formulas (24+ live cells on the sample). No more placeholders.
+- 🎙️ **YAHAVIS module** — drop-in adapter (`backend/yahavis_module.py`) so the YAHAVIS voice core can mount YAI-Excel and respond to "Yahavi, dashboard banao".
+- 🚀 **Production-ready deploy** — `vercel.json` + `fly.toml` + a dedicated guide to ship at `yexcel.hackknow.com` in under 10 minutes.
 
 ## Features
 

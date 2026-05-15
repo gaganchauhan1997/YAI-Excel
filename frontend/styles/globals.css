@@ -1,45 +1,191 @@
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
-@import url("https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+  --ink: #0a0a0a;
+  --paper: #f5f1e8;
+  --primary: #ffd300;
+  --secondary: #ff6bcb;
+  --accent: #4f7dF3;
 }
 
+* { -webkit-tap-highlight-color: transparent; }
+
 html, body {
-  background: #0c0c10;
-  color: #f1f5f9;
-  font-family: "Geist", system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-feature-settings: "ss01", "ss02", "cv11";
   min-height: 100%;
 }
 
-.font-display {
-  font-family: "Clash Display", "Geist", system-ui, sans-serif;
-  letter-spacing: -0.02em;
+body {
+  background-image:
+    radial-gradient(circle at 0 0, rgba(10,10,10,0.06) 1px, transparent 1px),
+    radial-gradient(circle at 12px 12px, rgba(10,10,10,0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-attachment: fixed;
 }
 
-.gradient-text {
-  background: linear-gradient(90deg, #6366f1, #22d3ee);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.font-display { font-family: "Archivo Black", "Space Grotesk", system-ui, sans-serif; letter-spacing: -0.02em; }
+.font-mono { font-family: "JetBrains Mono", Menlo, monospace; }
+
+/* ---------- Neo-brutalist primitives ---------- */
+
+.neo-card {
+  background: #fff;
+  border: 3px solid #0a0a0a;
+  box-shadow: 5px 5px 0 0 #0a0a0a;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.neo-card:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 0 #0a0a0a; }
+
+.neo-card-flat {
+  background: #fff;
+  border: 3px solid #0a0a0a;
+  box-shadow: 5px 5px 0 0 #0a0a0a;
 }
 
-.card {
-  background: rgba(22, 22, 30, 0.7);
-  border: 1px solid rgba(99, 102, 241, 0.15);
-  border-radius: 16px;
-  backdrop-filter: blur(12px);
+.neo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffd300;
+  color: #0a0a0a;
+  border: 3px solid #0a0a0a;
+  box-shadow: 4px 4px 0 0 #0a0a0a;
+  padding: 12px 22px;
+  font-weight: 700;
+  font-family: "Space Grotesk", sans-serif;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  text-decoration: none;
+}
+.neo-btn:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 #0a0a0a; }
+.neo-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 0 #0a0a0a; }
+.neo-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: 2px 2px 0 0 #0a0a0a; }
+
+.neo-btn-pink { background: #ff6bcb; color: #0a0a0a; }
+.neo-btn-blue { background: #4f7df3; color: #fff; }
+.neo-btn-dark { background: #0a0a0a; color: #fff; }
+.neo-btn-snow { background: #fff; color: #0a0a0a; }
+.neo-btn-ghost { background: transparent; box-shadow: none; }
+.neo-btn-ghost:hover { background: #f5f1e8; transform: none; box-shadow: 4px 4px 0 0 #0a0a0a; }
+
+.neo-input {
+  background: #fff;
+  border: 3px solid #0a0a0a;
+  padding: 12px 16px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 15px;
+  box-shadow: 4px 4px 0 0 #0a0a0a;
+  outline: none;
+  width: 100%;
+}
+.neo-input:focus { box-shadow: 6px 6px 0 0 #ffd300; }
+
+.neo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 2.5px solid #0a0a0a;
+  background: #fff;
+  padding: 4px 12px;
+  font-weight: 600;
+  font-size: 12px;
+  box-shadow: 2px 2px 0 0 #0a0a0a;
+  border-radius: 999px;
+}
+.neo-pill-dark { background: #0a0a0a; color: #fff; }
+.neo-pill-primary { background: #ffd300; }
+
+.neo-divider {
+  height: 3px;
+  background: #0a0a0a;
+  border: none;
+  margin: 0;
 }
 
-.glow {
-  box-shadow: 0 0 60px -10px rgba(99, 102, 241, 0.45);
+/* ---------- LibreChat-style chat shell ---------- */
+
+.chat-shell {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  grid-template-rows: 60px 1fr;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--paper);
+}
+.chat-sidebar { grid-row: 1 / -1; }
+.chat-topbar  { grid-column: 2 / -1; }
+.chat-main    { grid-column: 2 / -1; overflow: hidden; }
+
+@media (max-width: 900px) {
+  .chat-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: 60px 1fr;
+  }
+  .chat-sidebar {
+    position: fixed;
+    inset: 0 30% 0 0;
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+    z-index: 50;
+    grid-row: auto;
+  }
+  .chat-sidebar.open { transform: translateX(0); }
+  .chat-topbar { grid-column: 1 / -1; }
+  .chat-main { grid-column: 1 / -1; }
 }
 
+/* ---------- Mini-bubble messages ---------- */
+
+.msg-user {
+  align-self: flex-end;
+  max-width: min(640px, 90%);
+  background: #ffd300;
+  border: 3px solid #0a0a0a;
+  box-shadow: 4px 4px 0 0 #0a0a0a;
+  padding: 12px 16px;
+}
+.msg-assistant {
+  align-self: flex-start;
+  max-width: min(740px, 92%);
+  background: #fff;
+  border: 3px solid #0a0a0a;
+  box-shadow: 4px 4px 0 0 #0a0a0a;
+  padding: 14px 18px;
+}
+.msg-system {
+  align-self: flex-start;
+  background: #4f7df3;
+  color: #fff;
+  border: 3px solid #0a0a0a;
+  box-shadow: 4px 4px 0 0 #0a0a0a;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+.msg-result {
+  align-self: flex-start;
+  width: 100%;
+  background: #fff;
+  border: 3px solid #0a0a0a;
+  box-shadow: 5px 5px 0 0 #ff6bcb;
+  padding: 20px;
+}
+
+.tilt-l { transform: rotate(-0.8deg); }
+.tilt-r { transform: rotate(0.8deg); }
+
+/* ---------- Scrollbars ---------- */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: #0c0c10; }
-::-webkit-scrollbar-thumb { background: #1e1e2c; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #2d2d40; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #0a0a0a; border-radius: 0; }
+
+/* Selection */
+::selection { background: #ffd300; color: #0a0a0a; }

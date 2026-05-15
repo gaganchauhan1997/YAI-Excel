@@ -16,12 +16,14 @@ from openpyxl.utils.cell import coordinate_from_string
 from loguru import logger
 
 from .formatter import FormatEngine
+from .indian_formatter import excel_number_format
 
 
 @dataclass
 class KPIEngine:
     theme: dict
     formatter: FormatEngine
+    indian_format: bool = False
 
     def build_all(self, ws, kpis: list[dict]) -> int:
         built = 0
@@ -59,7 +61,8 @@ class KPIEngine:
         value_cell.font = Font(name=self.theme["font_name"], color=fg, bold=True, size=22)
         value_cell.fill = PatternFill("solid", fgColor=bg)
         value_cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-        value_cell.number_format = '#,##0.00;[Red]-#,##0.00'
+        is_inr = self.indian_format or bool(kpi.get("indian_format")) or (kpi.get("currency", "").upper() == "INR")
+        value_cell.number_format = excel_number_format("smart") if is_inr else '#,##0.00;[Red]-#,##0.00'
 
         trend_cell = ws.cell(row=row + 2, column=col)
         trend_cell.value = kpi.get("trend_formula") or self._default_trend(kpi)

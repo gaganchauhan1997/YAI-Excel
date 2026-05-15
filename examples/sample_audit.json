@@ -1,0 +1,126 @@
+{
+  "confidence": 0.92,
+  "detected_domain": "sales",
+  "meta": {
+    "total_sheets": 2,
+    "total_rows": 13,
+    "total_columns": 4,
+    "primary_color": "#1E3A5F",
+    "accent_color": "#FFC000",
+    "complexity": "advanced"
+  },
+  "interactive_controls": [
+    {
+      "type": "dropdown",
+      "location": "B1",
+      "linked_cell": "B1",
+      "options": ["Q1", "Q2", "Q3", "Q4", "All"],
+      "drives": ["all_kpis", "all_charts"]
+    }
+  ],
+  "kpi_strip": [
+    { "id": "kpi_1", "label": "Revenue", "formula": "=SUM(Data!B2:B13)", "trend": "up", "currency": "INR" },
+    { "id": "kpi_2", "label": "Cost", "formula": "=SUM(Data!C2:C13)", "trend": "down", "currency": "INR" },
+    { "id": "kpi_3", "label": "Profit", "formula": "=SUM(Data!B2:B13)-SUM(Data!C2:C13)", "trend": "up", "currency": "INR" },
+    { "id": "kpi_4", "label": "Margin %", "formula": "=(SUM(Data!B2:B13)-SUM(Data!C2:C13))/SUM(Data!B2:B13)", "trend": "up" }
+  ],
+  "charts": [
+    {
+      "id": "chart_1",
+      "type": "bar",
+      "title": "Revenue by Region",
+      "location": "B10",
+      "series": [
+        {
+          "name": "Revenue",
+          "values_range": "Data!B2:B13",
+          "categories_range": "Data!A2:A13",
+          "color": "1E3A5F"
+        }
+      ],
+      "has_legend": true,
+      "axis_x_title": "Region",
+      "axis_y_title": "Revenue (₹)"
+    },
+    {
+      "id": "chart_2",
+      "type": "donut",
+      "title": "Revenue Share",
+      "location": "L10",
+      "series": [
+        {
+          "name": "Share",
+          "values_range": "Data!B2:B7",
+          "categories_range": "Data!A2:A7",
+          "color": "FFC000"
+        }
+      ],
+      "has_data_labels": true
+    },
+    {
+      "id": "chart_3",
+      "type": "smooth_line",
+      "title": "Margin trend",
+      "location": "B26",
+      "series": [
+        {
+          "name": "Margin",
+          "values_range": "Data!D2:D13",
+          "categories_range": "Data!A2:A13",
+          "color": "22D3EE"
+        }
+      ]
+    }
+  ],
+  "pivot_tables": [
+    {
+      "id": "pivot_1",
+      "location": "V10",
+      "row_fields": ["Region"],
+      "value_fields": [
+        { "field": "Revenue", "aggregation": "SUM" },
+        { "field": "Cost", "aggregation": "SUM" }
+      ],
+      "filter_fields": [],
+      "has_grand_totals": true,
+      "source_range": "Data!A1:D13"
+    }
+  ],
+  "data_tables": [
+    {
+      "id": "table_1",
+      "sheet": "Data",
+      "location": "A1",
+      "headers": ["Region", "Revenue", "Cost", "Margin"],
+      "row_count": 12,
+      "has_totals_row": true,
+      "has_conditional_format": true
+    }
+  ],
+  "conditional_formatting": [
+    { "range": "Data!B2:B13", "rule_type": "color_scale" },
+    { "range": "Data!D2:D13", "rule_type": "data_bar" }
+  ],
+  "formulas": [
+    { "cell": "A1", "formula": "=\"YAI-Excel — \"&TEXT(TODAY(),\"DD MMM YYYY\")", "type": "text" }
+  ],
+  "named_ranges": [
+    { "name": "Regions", "refers_to": "Data!$A$2:$A$13" },
+    { "name": "RevenueRange", "refers_to": "Data!$B$2:$B$13" }
+  ],
+  "enhancement_suggestions": [
+    { "type": "add_chart", "description": "Add YTD running total chart", "priority": "medium" },
+    { "type": "add_kpi", "description": "Add average order value KPI", "priority": "low" }
+  ],
+  "_indian_format": true,
+  "counts": {
+    "charts": 3,
+    "pivots": 1,
+    "kpis": 4,
+    "formulas": 1,
+    "interactive_controls": 1,
+    "conditional_formats": 2,
+    "named_ranges": 2,
+    "slicers": 0
+  }
+}

@@ -64,7 +64,7 @@ class YAIExcelBuilder:
         self.theme = get_theme(self.theme_name)
         self.formatter = FormatEngine(self.theme)
         self.charts = ChartEngine(self.theme)
-        self.kpis = KPIEngine(self.theme, self.formatter)
+        self.kpis = KPIEngine(self.theme, self.formatter, indian_format=bool(self.audit.get("_indian_format")))
         self.tables = TableEngine(self.theme, self.formatter)
         self.pivots = PivotEngine(self.theme, self.formatter)
         self.interactivity = InteractivityEngine(self.theme)
