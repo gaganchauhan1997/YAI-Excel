@@ -77,14 +77,18 @@ NEXT_PUBLIC_API_URL=https://yai.example.com
 
 ## 3. Hosted PaaS
 
-### Vercel (frontend only)
+### Cloudflare Pages (frontend) — **recommended**
 
 ```bash
 cd frontend
-vercel
+npm install
+NEXT_PUBLIC_API_URL=https://your-api.example.com npm run build
+wrangler pages deploy out --project-name=yai-excel --branch=main
 ```
 
-Set `NEXT_PUBLIC_API_URL` to your public backend URL (e.g. Fly.io, Render).
+Or connect the repo via Cloudflare dashboard → **Workers & Pages → Create application → Pages → Connect to Git**. Pick `Next.js (Static HTML Export)`, build command `cd frontend && npm install && npm run build`, output `frontend/out`.
+
+For the `yexcel.hackknow.com` specifically, follow [`deploy-yexcel.md`](deploy-yexcel.md) — it's the supported path.
 
 ### Fly.io (backend)
 

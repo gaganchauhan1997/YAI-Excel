@@ -1,0 +1,17 @@
+# Cloudflare Pages — optional same-origin API proxy.
+#
+# By default we use a split-subdomain setup:
+#    yexcel.hackknow.com       → Cloudflare Pages (this build)
+#    api.yexcel.hackknow.com   → Fly.io backend
+# The frontend reads NEXT_PUBLIC_API_URL at build time and calls the backend
+# directly, so no proxy is needed.
+#
+# If you'd rather serve everything from a single origin (e.g. you don't want
+# to add a second CNAME), uncomment the lines below — Cloudflare will
+# transparently proxy /api/* and /files/* to your Fly backend.
+#
+# /api/*    https://yai-excel-api.fly.dev/api/:splat    200
+# /files/*  https://yai-excel-api.fly.dev/files/:splat  200
+#
+# SPA fallback — every unknown route renders the 404 page.
+/*  /404.html  404

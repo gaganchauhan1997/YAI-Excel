@@ -1,193 +1,229 @@
 # Deploy YAI-Excel to `yexcel.hackknow.com`
 
-This guide takes you from cloned repo → live on **https://yexcel.hackknow.com** in under 10 minutes.
+End-to-end deploy on **Cloudflare Pages + Fly.io + Cloudflare DNS**. From `git clone` → live URL in **under 10 minutes**, ₹0/mo.
 
-We use the free path:
-- **Frontend** → Vercel (free hobby tier, custom domains supported)
-- **Backend**  → Fly.io (free `shared-cpu-1x` 256-1024MB, BOM region)
-- **DNS**      → your Hackknow.com nameserver (Cloudflare / Namecheap / GoDaddy)
+```
+yexcel.hackknow.com         → Cloudflare Pages   (static Next.js export)
+api.yexcel.hackknow.com     → Fly.io (Mumbai)    (FastAPI + Excel engine)
+hackknow.com nameservers    → Cloudflare DNS     (you already manage it here)
+```
 
-> Total cost: ₹0 / month for low traffic.
+> **Why this split?** Cloudflare Pages free-tier caps each request at 100MB and CPU at 30s — enough for the static frontend but tight for video uploads. Putting the API on its own subdomain lets it bypass the edge entirely, lifts the file-size cap to Fly's defaults, and gives the frontend a clean CORS-only setup with no proxy in the middle.
 
 ---
 
 ## 0. Pre-flight
 
 ```bash
-# Install Vercel + Fly CLIs (one time)
-npm i -g vercel
-brew install flyctl                  # or: curl -L https://fly.io/install.sh | sh
+# CLIs (one time)
+npm install -g wrangler            # Cloudflare Pages / DNS
+curl -L https://fly.io/install.sh | sh    # Fly.io
 
-vercel login
-fly auth login
+wrangler login                     # opens browser
+fly auth login                     # opens browser
 ```
 
 You'll need:
 - GitHub access to `gaganchauhan1997/YAI-Excel`
-- At least one AI key (Gemini recommended — free at https://aistudio.google.com/apikey)
-- DNS access for `hackknow.com`
+- A Cloudflare account with `hackknow.com` on it (free plan is fine)
+- A Fly.io account (free tier)
+- At least one AI key — Gemini recommended (free: <https://aistudio.google.com/apikey>)
 
 ---
 
-## 1. Deploy the backend to Fly (Mumbai region)
+## 1. Deploy the backend to Fly.io
 
 ```bash
 cd backend
 
-# First-time deploy
+# First-time launch — uses fly.toml (already in the repo)
 fly launch --copy-config --name yai-excel-api --region bom --no-deploy
+
+# Persistent storage for uploads + outputs
 fly volumes create yai_excel_data --region bom --size 1
+
+# Secrets — at minimum, set GEMINI_API_KEY
 fly secrets set \
   GEMINI_API_KEY=YOUR_GEMINI_KEY \
   GROQ_API_KEY=YOUR_GROQ_KEY \
   ALLOWED_ORIGINS="https://yexcel.hackknow.com,http://localhost:3000"
+
 fly deploy --remote-only
 ```
 
 Verify:
 
 ```bash
-curl https://yai-excel-api.fly.dev/healthz       # → {"status":"ok"}
-curl https://yai-excel-api.fly.dev/api/themes    # → {"themes":[…10 themes…]}
+curl https://yai-excel-api.fly.dev/healthz      # → {"status":"ok"}
+curl https://yai-excel-api.fly.dev/api/themes   # → {"themes":[ … 10 themes …]}
 ```
 
----
-
-## 2. Deploy the frontend to Vercel
+### 1a. Bind `api.yexcel.hackknow.com` to Fly
 
 ```bash
-cd ../frontend
-
-# First-time deploy
-vercel link --yes --project yai-excel
-vercel env add NEXT_PUBLIC_API_URL production
-# Paste: https://yai-excel-api.fly.dev
-
-vercel --prod
-```
-
-You'll get a URL like `yai-excel-xyz.vercel.app`. Open it — full site should load.
-
----
-
-## 3. Wire the custom domain
-
-### 3a — in Vercel
-
-```bash
-vercel domains add yexcel.hackknow.com
-```
-
-Vercel will print a target hostname (something like `cname.vercel-dns.com`) and ask you to add it as a DNS record. Keep that page open.
-
-### 3b — in your DNS provider (Cloudflare / Namecheap / Hostinger)
-
-Add **one** CNAME record on `hackknow.com`:
-
-| Type  | Name (host) | Value                | TTL  | Proxy |
-|-------|-------------|----------------------|------|-------|
-| CNAME | `yexcel`    | `cname.vercel-dns.com` | Auto | OFF (DNS only) |
-
-> If you're on Cloudflare: keep proxy **OFF (grey cloud)** so Vercel can issue the cert. After it's live you can switch the cloud to orange.
-
-Wait 30s – 5min for DNS propagation, then in Vercel:
-
-```bash
-vercel certs add yexcel.hackknow.com
-```
-
-Vercel auto-provisions a Let's Encrypt cert. Done.
-
-### 3c — confirm
-
-```bash
-curl -I https://yexcel.hackknow.com    # → HTTP/2 200
-```
-
----
-
-## 4. (Optional) Custom backend domain
-
-If you'd like the API on `api.yexcel.hackknow.com` instead of `*.fly.dev`:
-
-```bash
-cd backend
 fly certs add api.yexcel.hackknow.com
 fly certs show api.yexcel.hackknow.com
 ```
 
-Fly will print two records to add. In your DNS:
-
-| Type   | Name                       | Value                              |
-|--------|----------------------------|------------------------------------|
-| CNAME  | `api.yexcel`               | `yai-excel-api.fly.dev`            |
-| TXT    | `_acme-challenge.api.yexcel` | (the value Fly gives you)        |
-
-Then update `frontend/vercel.json` to point all `/api/*` rewrites at `https://api.yexcel.hackknow.com` and redeploy.
+Fly prints two records. You'll add them in step 3 below.
 
 ---
 
-## 5. Smoke test the live site
+## 2. Deploy the frontend to Cloudflare Pages
+
+### Option A — Wrangler CLI (one shot)
 
 ```bash
-# Upload a CSV from this repo
-TOKEN=$(curl -s -F "file=@examples/sample_sales.csv" \
-  https://yexcel.hackknow.com/api/upload | jq -r .token)
+cd frontend
 
-# Build it
-curl -s -X POST https://yexcel.hackknow.com/api/generate \
+# Install deps + build the static export
+npm install
+NEXT_PUBLIC_API_URL=https://api.yexcel.hackknow.com npm run build
+
+# Create the Pages project (one time)
+wrangler pages project create yai-excel \
+  --production-branch=main \
+  --compatibility-date=2026-05-01
+
+# Deploy
+wrangler pages deploy out --project-name=yai-excel --branch=main
+```
+
+### Option B — Git integration (recommended for ongoing work)
+
+In the **Cloudflare dashboard** → **Workers & Pages** → **Create application** → **Pages** → **Connect to Git**:
+
+1. Pick `gaganchauhan1997/YAI-Excel`
+2. **Production branch:** `main`
+3. **Framework preset:** `Next.js (Static HTML Export)`
+4. **Build command:** `cd frontend && npm install && npm run build`
+5. **Build output directory:** `frontend/out`
+6. **Environment variables** (Production):
+   - `NEXT_PUBLIC_API_URL` = `https://api.yexcel.hackknow.com`
+   - `NODE_VERSION` = `20`
+
+Save. Cloudflare builds the site and assigns a `yai-excel.pages.dev` URL. Open it — full app loads, calls backend cleanly.
+
+After this every `git push origin main` re-deploys automatically. No further commands.
+
+---
+
+## 3. Wire `yexcel.hackknow.com` + `api.yexcel.hackknow.com`
+
+In the **Cloudflare dashboard** → **hackknow.com zone** → **DNS** → **Records**:
+
+### 3a. Add the frontend record
+
+| Type | Name | Target | Proxy status |
+|------|------|--------|--------------|
+| **CNAME** | `yexcel` | `yai-excel.pages.dev` | **Proxied (orange cloud)** |
+
+### 3b. Add the API record
+
+| Type | Name | Target | Proxy status |
+|------|------|--------|--------------|
+| **CNAME** | `api.yexcel` | `yai-excel-api.fly.dev` | **DNS only (grey cloud)** |
+| **TXT** | `_acme-challenge.api.yexcel` | *(value from `fly certs show`)* | DNS only |
+
+> Keep the API record **DNS-only** (grey cloud). If you proxy it through Cloudflare, you'll hit the 100MB request limit on free plans, and Fly's TLS cert won't issue.
+
+### 3c. Hook up the Pages custom domain
+
+In Cloudflare dashboard → **Workers & Pages** → `yai-excel` → **Custom domains** → **Set up a custom domain** → type `yexcel.hackknow.com` → **Continue**. Cloudflare validates DNS instantly (you're on the same account) and issues the certificate in ~30 seconds.
+
+### 3d. Confirm
+
+```bash
+dig +short yexcel.hackknow.com         # → Cloudflare anycast IPs
+dig +short api.yexcel.hackknow.com     # → Fly.io edge IP
+
+curl -I https://yexcel.hackknow.com         # → HTTP/2 200
+curl    https://api.yexcel.hackknow.com/healthz   # → {"status":"ok"}
+```
+
+---
+
+## 4. Smoke test end-to-end
+
+```bash
+# Upload the sample CSV (under examples/ in the repo)
+TOKEN=$(curl -s -F "file=@examples/sample_sales.csv" \
+  https://api.yexcel.hackknow.com/api/upload | jq -r .token)
+
+# Build
+curl -s -X POST https://api.yexcel.hackknow.com/api/generate \
   -H "Content-Type: application/json" \
   -d "{\"token\":\"$TOKEN\",\"theme\":\"midnight\"}" | jq
 
 # Download
-curl -O "https://yexcel.hackknow.com/files/YAI-Excel_${TOKEN:0:8}_midnight.xlsx"
+curl -O "https://api.yexcel.hackknow.com/files/YAI-Excel_${TOKEN:0:8}_midnight.xlsx"
 ```
 
-If all three work — you're shipping.
+Open `https://yexcel.hackknow.com` in the browser, drop the same CSV, hit **Generate** — same workbook.
 
 ---
 
-## 6. Update workflow
+## 5. Update workflow (after step 2 Option B)
 
-After every push to `main`:
+You're done. Every push to `main`:
 
-```bash
-# Backend
-cd backend && fly deploy --remote-only
-
-# Frontend (or just push to GitHub — Vercel auto-deploys on push to main)
-cd ../frontend && vercel --prod
-```
-
-Enable Vercel's Git integration once and you can skip the manual frontend deploy:
-
-```bash
-vercel git connect
-```
+- **Frontend** → Cloudflare auto-builds & deploys (≈ 45s).
+- **Backend** → `cd backend && fly deploy --remote-only` (still manual, or add the Action in section 6).
 
 ---
 
-## 7. Costs / scaling notes
+## 6. (Optional) Auto-deploy the backend too
 
-- Fly free tier covers ~3 shared-cpu-1x machines, 160GB outbound/month
-- Vercel hobby covers 100GB bandwidth, unlimited static
-- Vision API calls use **your** Gemini quota (60 req/min on the free tier — plenty for personal use, swap to Groq/OpenAI on rate limit)
-- For Hackknow-scale traffic, upgrade Fly to `shared-cpu-2x 2GB` (~$5/mo) — the engine fits comfortably
+Add a GitHub Action so backend deploys on every push:
+
+```yaml
+# .github/workflows/deploy-backend.yml
+name: deploy-backend
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/deploy-backend.yml"]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only --config backend/fly.toml
+        working-directory: backend
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+```
+
+Generate the token with `fly auth token`, paste it into the repo's **Settings → Secrets and variables → Actions** as `FLY_API_TOKEN`. Done.
+
+---
+
+## 7. Free-tier limits (worth knowing)
+
+| Resource | Free quota | Likely impact |
+|---|---|---|
+| Cloudflare Pages | Unlimited bandwidth, 500 builds/mo, 100MB file upload to functions | Frontend handles it; uploads bypass via `api.` subdomain |
+| Fly.io | 3 shared-cpu-1x VMs, 160GB egress/mo | Plenty for personal / small-team |
+| Gemini 2.5 Flash | 60 RPM, 1500 RPD | Rotate to Groq/OpenAI on burst — already built into AIRouter |
+| Cloudflare DNS | Unlimited records | n/a |
+
+For Hackknow-scale traffic, scale Fly to `shared-cpu-2x 2GB` for ~$5/mo.
 
 ---
 
 ## 8. Troubleshooting
 
 | Symptom | Likely cause | Fix |
-|---------|--------------|-----|
-| 502 from Vercel | Backend Fly machine asleep | First request wakes it — retry in 10s; or set `min_machines_running = 1` in `fly.toml` |
-| CORS error | `ALLOWED_ORIGINS` missing your domain | `fly secrets set ALLOWED_ORIGINS="https://yexcel.hackknow.com,…"` and redeploy |
-| `Vision unsupported` in logs | No vision-capable key | Add `GEMINI_API_KEY` (free) |
-| DNS doesn't resolve | TTL not expired | Wait 5min, then `dig yexcel.hackknow.com +short` should return Vercel IPs |
-| Vercel cert pending | Cloudflare proxy on | Set the record to DNS-only (grey cloud), wait 60s, retry |
+|---|---|---|
+| Frontend 522 / 521 | Backend Fly machine asleep | Hit `https://api.yexcel.hackknow.com/healthz` once to wake it (first request takes ~3s). Set `min_machines_running = 1` in `fly.toml` to keep it warm. |
+| Frontend 404 on `/dashboard` | Trailing slash mismatch | We export with `trailingSlash: true`. Browse to `/dashboard/` (with trailing /). Cloudflare auto-handles this for typed URLs. |
+| CORS error in browser console | `ALLOWED_ORIGINS` missing | `fly secrets set ALLOWED_ORIGINS="https://yexcel.hackknow.com,http://localhost:3000"` then redeploy |
+| Cert pending on `api.yexcel` | DNS still proxied | Toggle the orange cloud OFF (DNS-only) on the API record. Run `fly certs show api.yexcel.hackknow.com` — wait until both checks ✓. |
+| `Vision unsupported` in logs | No vision-capable key set | `fly secrets set GEMINI_API_KEY=…` |
+| File > 100MB rejected | Hit Cloudflare proxy limit | Make sure API record is DNS-only (grey cloud). If it's proxied, even legit uploads to `api.yexcel.hackknow.com` get capped. |
+| Build fails on Cloudflare with `output: "export"` related error | Old cached Next.js workers | In Pages settings → **Settings → Functions → Compatibility flags**, ensure no Node compat is forced. We don't need it. |
 
 ---
 
-**You're done, Boss.** 🚀
-
-Open https://yexcel.hackknow.com and drop a CSV.
+**That's the whole map, Boss.** Run section 1, set up section 2 Option B once, drop two CNAMEs in section 3, and `yexcel.hackknow.com` is live for as long as Cloudflare and Fly are. 🚀

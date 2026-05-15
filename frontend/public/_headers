@@ -1,0 +1,15 @@
+# Cloudflare Pages — global security headers
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(self), geolocation=()
+  X-DNS-Prefetch-Control: on
+
+# Long-cache built JS/CSS
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Don't cache HTML — instant deploys
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate

@@ -8,6 +8,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-FFD300.svg?style=flat-square)](LICENSE)
 [![Stack](https://img.shields.io/badge/stack-Next.js%2014%20%2B%20FastAPI-0A0A0A.svg?style=flat-square)]()
+[![Deploy: Cloudflare Pages](https://img.shields.io/badge/deploy-Cloudflare%20Pages-F38020.svg?style=flat-square)](docs/deploy-yexcel.md)
+[![Deploy: Fly.io](https://img.shields.io/badge/api-Fly.io%20Mumbai-7B3FFF.svg?style=flat-square)](docs/deploy-yexcel.md)
 [![Free Tier](https://img.shields.io/badge/APIs-Free%20Tier%20First-FF6BCB.svg?style=flat-square)]()
 [![Hindi · हिं](https://img.shields.io/badge/UI-EN%20%C2%B7%20%E0%A4%B9%E0%A4%BF%E0%A4%82-4F7DF3.svg?style=flat-square)]()
 [![INR · ₹](https://img.shields.io/badge/Indian%20%E2%82%B9-Lakhs%20%C2%B7%20Crores-5EE49B.svg?style=flat-square)]()
@@ -85,7 +87,7 @@ Open `http://localhost:3000`, drop **any** input, choose a theme, hit **Generate
 - 🧱 **Neo-brutalist redesign** — thick black borders, hard shadows, chunky display type. LibreChat-grade three-pane layout with collapsible sidebar, chat-style audit stream, and a fused universal input bar.
 - 📐 **Real SUMIFS pivots** — `PivotEngine` now reads the actual source range, computes unique row labels, and emits true `SUMIFS / COUNTIFS / AVERAGEIFS` formulas (24+ live cells on the sample). No more placeholders.
 - 🎙️ **YAHAVIS module** — drop-in adapter (`backend/yahavis_module.py`) so the YAHAVIS voice core can mount YAI-Excel and respond to "Yahavi, dashboard banao".
-- 🚀 **Production-ready deploy** — `vercel.json` + `fly.toml` + a dedicated guide to ship at `yexcel.hackknow.com` in under 10 minutes.
+- 🚀 **Cloudflare-native deploy** — static Next.js export to **Cloudflare Pages** (`yexcel.hackknow.com`) + FastAPI on **Fly.io Mumbai** (`api.yexcel.hackknow.com`). Free tier, one-click Git-integration auto-deploys. Guide: [`docs/deploy-yexcel.md`](docs/deploy-yexcel.md).
 
 ## Features
 
