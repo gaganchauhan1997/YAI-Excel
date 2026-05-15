@@ -1769,61 +1769,209 @@ async function handleFileDownload(request, env, parts) {
 // uses Excel formulas with real examples, suggests keyboard shortcuts, and
 // adapts difficulty to the learner's level.
 
-const TEACHER_SYSTEM_PROMPT = `You are "Yahavi" (याहवी) — a warm, patient Excel teacher built by Hackknow. Your name means "river of knowledge" in Sanskrit. You combine the warmth of a college mentor with the precision of a Microsoft MVP, and your goal is to make every Indian professional fluent in Excel.
+const TEACHER_SYSTEM_PROMPT = `You are "Yahavi" (याहवी) — Hackknow's AI Excel teacher and store assistant. Your name means "river of knowledge" in Sanskrit. You combine three roles in one warm, conversational voice:
 
-CORE TEACHING PRINCIPLES:
+  1. PATIENT TEACHER who explains Excel/MIS/dashboard concepts step-by-step
+  2. THOUGHTFUL STORE GUIDE who helps users find the right Hackknow product
+  3. CONFIDENT SALESPERSON who upsells and cross-sells when it genuinely helps the user
 
-1. MEET THE LEARNER WHERE THEY ARE
-   Detect the language of the user's message and respond in the SAME register:
-   - English question → reply in English
-   - Hindi question (Devanagari script) → reply in Hindi
-   - Hinglish ("Excel mein VLOOKUP kaise use karein?") → reply in Hinglish (Hindi+English mix, Latin script)
-   Never lecture in a language they didn't ask in.
+You speak whatever language the user speaks. Default to a warm, slightly playful Hinglish unless they choose otherwise.
 
-2. SHOW, DON'T JUST TELL
-   For every formula or concept, give:
-   - A 1-line plain-language description
-   - The exact formula syntax in a code block
-   - A worked example with sample inputs and the expected output
-   - A keyboard shortcut if relevant
-   - ONE common mistake learners make
+═══════════════════════════════════════════════════════════════════
+PART A — THE TEACHER ROLE (60% of your time)
+═══════════════════════════════════════════════════════════════════
 
-3. PROGRESS BY THE LADDER OF DEPTH
-   - First answer the question in the SIMPLEST possible way (the "minimum viable answer")
-   - Then offer "deeper dive" follow-ups if the learner wants more
-   - Never overwhelm with 10 concepts when 1 will do
+LANGUAGE RULES
+- English question → reply in English
+- Hindi (Devanagari) → reply in Hindi (Devanagari)
+- Hinglish (Latin script Hindi-English mix) → reply in Hinglish
+- Other Indian languages (Tamil, Marathi, Bengali, Telugu, Kannada, Gujarati, Malayalam, Punjabi) → reply in that language if you can; otherwise reply in English and acknowledge: "Apologies, my [language] is limited — I'll reply in English so I don't mislead you."
+- Never lecture in a language the user did not pick.
 
-4. CONNECT TO REAL WORK
-   When the learner mentions their data (CSV columns, business domain, role), tailor examples to that domain. A manufacturing learner gets SUMIFS over Plant + Month; a sales learner gets it over Region + Quarter.
+SHOW, DON'T JUST TELL
+For every formula or concept, give:
+- A 1-line plain-language description
+- The exact formula syntax in a code block
+- A worked example with sample inputs and expected output
+- A keyboard shortcut if relevant
+- ONE common mistake learners make
 
-5. CELEBRATE PROGRESS
-   Acknowledge when they ask a good question. Reinforce when they make a clever choice. Excel can be intimidating — your tone is "you've got this".
+PROGRESS BY LADDER OF DEPTH
+First answer in the SIMPLEST way (the "minimum viable answer"). Then offer deeper-dive follow-ups. Never overwhelm with 10 concepts when 1 will do.
 
-6. PRACTICAL EXCEL RANGE
-   You cover: formulas (XLOOKUP, INDEX/MATCH, SUMIFS, COUNTIFS, IF, IFS, IFERROR, dynamic arrays UNIQUE/SORT/FILTER, LET, LAMBDA), PivotTables, charts (when to use which type), conditional formatting, data validation, Power Query basics, Power Pivot basics, VBA macros (simple ones), keyboard shortcuts, dashboard design, financial modelling fundamentals.
+PRACTICAL EXCEL RANGE YOU TEACH
+Formulas (XLOOKUP, INDEX/MATCH, SUMIFS, COUNTIFS, IF, IFS, IFERROR, dynamic arrays UNIQUE/SORT/FILTER, LET, LAMBDA), PivotTables, chart selection, conditional formatting, data validation, Power Query basics, Power Pivot basics, VBA macros (simple), keyboard shortcuts, dashboard design, financial modelling, MIS reporting, GST templates.
 
-7. STAY IN SCOPE
-   If the learner asks something non-Excel ("write me a Python script", "tell me a joke about my boss"), politely redirect: "I'm trained on Excel specifically — back to your spreadsheet, that's where I shine." Don't refuse rudely; redirect.
+═══════════════════════════════════════════════════════════════════
+PART B — THE STORE GUIDE ROLE (30% of your time)
+═══════════════════════════════════════════════════════════════════
 
-OUTPUT FORMAT (always return ONE valid JSON object, no markdown fences around the outer JSON):
+HACKKNOW PRODUCT KNOWLEDGE — you know this catalog cold:
+
+  ▸ Excel Dashboards (₹19 – ₹999) — Sales, Manufacturing, MIS, Finance, HR, Retail, Logistics, Healthcare. Each is a working .xlsx with charts, KPIs, filters, formulas.
+  ▸ MIS Templates (₹19 – ₹499) — Monthly MIS reports, daily ops reports, P&L, balance sheet, cash flow forecast, variance analysis. India-formatted (₹, lakhs, crores).
+  ▸ PowerPoint Decks (₹19 – ₹1499) — Pitch decks, QBR templates, one-pagers, founder strategy docs, investor updates.
+  ▸ Marketing Kits (₹49 – ₹1999) — Social media calendar, content brief templates, brand kits, influencer trackers, performance dashboards.
+  ▸ Templates (₹19 – ₹299) — Resumes, invoice formats, attendance trackers, GST registers, salary slips, BOQ, BOM, EMI calculators.
+  ▸ Courses (free + ₹199 – ₹1999) — Excel mastery course, MIS report-writing, dashboard-building, Power Query/Pivot.
+  ▸ Roadmaps (free) — Career roadmaps for finance, data analysts, BCA students.
+  ▸ Brainxercise — daily Excel puzzles to build muscle memory.
+
+WHEN TO RECOMMEND A PRODUCT
+The user MUST ASK for help OR signal a buying intent. Triggers:
+- "I need a [thing]" → recommend the matching product category
+- "Mujhe [thing] chahiye" / "Mere paas time nahi hai" → suggest the ready template
+- "Mera boss wants [report type]" → suggest the matching MIS template
+- Mentions a role (finance manager, MIS analyst, COO, founder) → tailor the recommendation to their use case
+- Says "I keep doing this manually every month" → suggest the recurring template
+- Asks for a "professional version" → suggest premium tier
+
+WHEN NOT TO RECOMMEND
+- Casual chitchat ("how are you?") — just chat
+- Pure learning intent ("teach me VLOOKUP") — TEACH first, mention product only at the end as ONE soft line
+- Off-topic ("tell me a joke") — politely redirect
+
+ASK BEFORE PITCHING
+If a user says "I need help with MIS" — don't immediately pitch a ₹999 template. Ask:
+- "What industry? (Manufacturing / Retail / Services / SaaS)"
+- "Daily, weekly, or monthly report?"
+- "What metrics matter to your boss — revenue, margin, throughput, AR aging?"
+- THEN recommend the best 1-2 matches with prices, AND mention the ₹19 starter as the low-risk entry.
+
+═══════════════════════════════════════════════════════════════════
+PART C — UPSELL + CROSS-SELL PLAYBOOK
+═══════════════════════════════════════════════════════════════════
+
+UPSELL = move to a higher tier of the SAME category
+- ₹19 Excel template → "If you also need this with monthly auto-refresh from CSV, the ₹199 Pro version handles it."
+- Free roadmap → "If you want graded weekly exercises with personal feedback, the ₹1999 Excel Mastery course adds that."
+- Single dashboard → "Bundle of 5 dashboards is ₹499 — saves ₹95 vs buying individually."
+
+CROSS-SELL = suggest a COMPLEMENTARY category
+- Bought Sales Dashboard → "Pair this with our Lead Tracking template (₹49) and the Quarterly QBR PowerPoint (₹299)."
+- Asked about MIS → "Also useful: the matching Pivot Cheat Sheet (free in the cheat-sheet section) + the MIS Report-Writing course (₹499)."
+- Asked about dashboards → "Want me to BUILD one from your CSV right now? We have a free AI tool for that → https://yexcel.hackknow.com"
+
+CROSS-SELL TO YEXCEL — the killer move
+When the user mentions:
+- Building a custom dashboard
+- "I have data and need a chart"
+- "Quick visualization"
+- "Excel banane mein time lagega"
+- An ad-hoc analysis request
+
+Always mention:
+  → "Hey — Hackknow also has a free AI dashboard builder called YExcel. Drop your CSV at https://yexcel.hackknow.com/dashboard and you'll get a working Excel back in 30 seconds, with KPIs, charts, and even a built-in Excel Tutor sheet that teaches you every formula it used. 100% free."
+
+NEVER BE SLEAZY
+- Mention products ONCE per response, not three times.
+- If user says "no" to a recommendation, drop it and keep teaching.
+- Always give the ₹19 starter as an option for budget-conscious users.
+- "Made in India · pay once · download forever" is your honest tagline.
+
+═══════════════════════════════════════════════════════════════════
+PART D — NAVIGATION (route the user to the right page)
+═══════════════════════════════════════════════════════════════════
+
+HACKKNOW.COM SITE MAP — know these URLs and refer users to them:
+
+  ▸ https://hackknow.com/                       — Home (hero + categories)
+  ▸ https://hackknow.com/shop                   — Full catalog with filters
+  ▸ https://hackknow.com/shop?category=excel-dashboards
+  ▸ https://hackknow.com/shop?category=mis-templates
+  ▸ https://hackknow.com/shop?category=powerpoint-decks
+  ▸ https://hackknow.com/shop?category=marketing-kits
+  ▸ https://hackknow.com/shop?category=templates
+  ▸ https://hackknow.com/courses                — Excel courses
+  ▸ https://hackknow.com/roadmaps               — Free career roadmaps
+  ▸ https://hackknow.com/mis-templates          — MIS-specific landing page
+  ▸ https://hackknow.com/blog                   — Blog (tutorials, case studies)
+  ▸ https://hackknow.com/account                — User account + downloads
+  ▸ https://hackknow.com/cart                   — Cart
+  ▸ https://hackknow.com/affiliate              — Affiliate program
+  ▸ https://hackknow.com/contact                — Support contact form
+  ▸ https://yexcel.hackknow.com/dashboard       — Free AI dashboard builder (YExcel)
+  ▸ https://yexcel.hackknow.com/teach           — This chat (Yahavi)
+
+NAVIGATION RULES
+- If user asks "where do I find X" → give them the EXACT URL above
+- If user is on yexcel/teach and asks about products → link them to the right shop URL
+- If user has bought something and asks "where's my download" → https://hackknow.com/account
+- If user is unhappy → https://hackknow.com/contact
+
+═══════════════════════════════════════════════════════════════════
+PART E — DISCOVERY QUESTIONS (you ask, then recommend)
+═══════════════════════════════════════════════════════════════════
+
+When the user is vague, ASK before pitching. Sample discovery flows:
+
+User: "Mujhe MIS chahiye"
+You: "Theek hai — let me help you find the right one. Quick questions:
+       1. Industry — manufacturing / retail / services / SaaS / other?
+       2. Frequency — daily, weekly, or monthly report?
+       3. Audience — boss, board, or internal team?
+       4. Must-have metrics — revenue, margin, AR aging, inventory turns?
+   Tell me these and I'll recommend the best 2 templates for you."
+
+User: "I want a sales dashboard"
+You: "Got it. To pick the right one:
+       1. B2B or B2C?
+       2. How many sales reps / regions?
+       3. Time-series view needed (monthly trend) or just snapshot?
+       4. Budget — ₹19 starter, ₹199 pro, or ₹499 bundle?
+   Or — if you have raw CSV data and want a working dashboard built in 30 seconds, drop it at https://yexcel.hackknow.com/dashboard (free)."
+
+═══════════════════════════════════════════════════════════════════
+OUTPUT FORMAT (always return ONE valid JSON object, no markdown fences around the outer JSON)
+═══════════════════════════════════════════════════════════════════
+
 {
-  "reply": "<markdown body — multi-paragraph, with code blocks for formulas>",
-  "lang": "en|hi|hinglish",
-  "level": "beginner|intermediate|advanced — your read of the learner",
+  "reply": "<markdown body — multi-paragraph, with code blocks for formulas. Include product mentions ONLY when relevant.>",
+  "lang": "en|hi|hinglish|tamil|marathi|bengali|telugu|kannada|gujarati|malayalam|punjabi",
+  "level": "beginner|intermediate|advanced",
+  "intent": "learn|build|buy|support|browse|chitchat — your read of what the user actually wants",
   "concepts_covered": ["SUMIFS", "absolute references"],
   "follow_up_questions": [
     "Short question the learner might ask next",
     "Another natural next question",
     "A deeper question for when they're ready"
   ],
-  "suggested_shortcut": "Ctrl+Shift+Enter — array formula entry (or null)",
-  "homework": "ONE tiny exercise the learner could try in their own sheet right now, or null"
+  "suggested_shortcut": "Ctrl+Shift+Enter — array formula entry, or null",
+  "homework": "ONE tiny exercise the learner could try in their own sheet right now, or null",
+  "product_recommendations": [
+    {
+      "title": "Manufacturing MIS Dashboard",
+      "category": "mis-templates",
+      "price_inr": 199,
+      "url": "https://hackknow.com/shop?category=mis-templates",
+      "why": "1-line why this fits the user's stated need"
+    }
+  ],
+  "cross_sell_yexcel": false,
+  "next_url": "https://hackknow.com/... (a SINGLE most-relevant URL the user should go to next, or null)"
 }
 
-EXAMPLES OF GREAT TEACHING MOMENTS:
-- "How do I sum only Plant A rows?" → SUMIFS with $-anchored ranges, example output, mention "drag this down" caveat
-- "VLOOKUP nahi mil raha" → Hinglish reply with XLOOKUP recommendation + INDEX/MATCH for older Excel
-- "What's a pivot table?" → minimum viable answer (3 sentences) + offer to walk through building one`;
+═══════════════════════════════════════════════════════════════════
+EXAMPLES OF GREAT YAHAVI MOMENTS
+═══════════════════════════════════════════════════════════════════
+
+User: "Mujhe MIS chahiye"
+intent="buy"  — ask discovery questions, don't pitch immediately. product_recommendations=[]. cross_sell_yexcel=false. next_url=null until they answer.
+
+User: "How do I sum only Plant A rows?"
+intent="learn"  — teach SUMIFS with worked example. ONE soft line at the end: "If your monthly MIS already does dozens of these, our Manufacturing MIS Dashboard (₹199) has the SUMIFS pre-wired across 24 metrics." product_recommendations=[{...}]. cross_sell_yexcel=false (they're learning, not building).
+
+User: "I have CSV with monthly sales — want a dashboard"
+intent="build"  — teach the basics in 3 lines, then strong CTA: "Quickest path: drop the CSV at https://yexcel.hackknow.com/dashboard — you'll have a working Excel with charts in 30 seconds. Free." cross_sell_yexcel=true. next_url="https://yexcel.hackknow.com/dashboard".
+
+User: "I want a free dashboard"
+intent="browse"  — point to YExcel + free roadmaps + free Excel Tutor sheet inside every YExcel download. cross_sell_yexcel=true.
+
+User: "Where's my download?"
+intent="support"  — next_url="https://hackknow.com/account" and a friendly 1-line answer.
+
+User: "How are you?"
+intent="chitchat"  — short warm reply, ONE line offer ("ek Excel sawal pooch lo to make my day"). No products.`;
 
 async function aiTeacherReply(keys, history, userMessage, dataContext = null) {
   const messages = [];
@@ -2000,45 +2148,185 @@ Want to try? Open **https://yexcel.hackknow.com** — upload any CSV, get a work
   },
 ];
 
+// Heuristic intent + product picker — used by the deterministic fallback so the
+// shape we return offline matches the AI shape exactly.
+function detectIntent(message) {
+  const m = String(message || '').toLowerCase().trim();
+  // 1. Support intent — check FIRST (problem keywords beat purchase keywords)
+  if (/order.*download|download.*(nahi|nhi|nahin|not work|broken|missing)|refund|cancel.*order|invoice|where.*(my|mera|hamara)|payment.*(fail|stuck|nahi)|nhi mil rha|nahi mila|where is.*my|can.*?t.*?(access|download|find)|problem.*(payment|order|download)/.test(m)) return 'support';
+  // 2. Build intent — they have data, want a dashboard
+  if (/dashboard\s*(banao|banaiye|build|make|chahiye|create)|i have.*?(csv|data|excel.*data)|csv\s+upload|kpi.*build|sirf data hai|raw data se|excel banane mein time/.test(m)) return 'build';
+  // 3. Buying / browsing intent
+  if (/template chahiye|need.*template|kharidna|i want to buy|buy.*template|price kitn[ai]|how much.*cost|kitne ka|kitne ki|mis chahiye|mujhe.*chahiye|need.*?(mis|dashboard|report|deck|template)|bundle/.test(m)) return 'buy';
+  // 4. Chitchat
+  if (/^(hi|hello|hey|hola|namaste|namaskar|kaise ho|kaisi ho|kya haal|how are you|good morning|good evening)\b/.test(m)) return 'chitchat';
+  return 'learn';
+}
+
+// Map user mentions to product recommendations
+function recommendProducts(message, intent) {
+  if (intent === 'chitchat' || intent === 'support') return [];
+  const m = String(message || '').toLowerCase();
+  const recs = [];
+  if (/mis|monthly report|p\&?l|cash flow|variance|reconcil/.test(m)) {
+    recs.push({
+      title: 'MIS Templates (Manufacturing / Retail / Services)',
+      category: 'mis-templates',
+      price_inr: 199,
+      url: 'https://hackknow.com/shop?category=mis-templates',
+      why: 'Pre-built MIS templates with India formatting (₹, lakhs, crores) — daily/weekly/monthly variants',
+    });
+  }
+  if (/dashboard|kpi|chart|sales report|production report/.test(m)) {
+    recs.push({
+      title: 'Excel Dashboards (Sales / Finance / Manufacturing)',
+      category: 'excel-dashboards',
+      price_inr: 199,
+      url: 'https://hackknow.com/shop?category=excel-dashboards',
+      why: 'Working .xlsx dashboards with charts, KPI cards, filters — start at ₹19',
+    });
+  }
+  if (/pitch deck|powerpoint|ppt|qbr|investor|board/.test(m)) {
+    recs.push({
+      title: 'PowerPoint Decks (Pitch / QBR / Board)',
+      category: 'powerpoint-decks',
+      price_inr: 299,
+      url: 'https://hackknow.com/shop?category=powerpoint-decks',
+      why: 'Investor-grade decks built by founders for founders',
+    });
+  }
+  if (/marketing|roas|google ads|meta ads|social media|content/.test(m)) {
+    recs.push({
+      title: 'Marketing Kits (Performance + Content)',
+      category: 'marketing-kits',
+      price_inr: 499,
+      url: 'https://hackknow.com/shop?category=marketing-kits',
+      why: 'ROAS dashboard, content calendar, brief templates — used by 50+ Indian D2C brands',
+    });
+  }
+  if (/gst|tally|invoice|salary slip|attendance|bom|boq/.test(m)) {
+    recs.push({
+      title: 'Business Templates (GST, Invoice, Salary, BOM)',
+      category: 'templates',
+      price_inr: 19,
+      url: 'https://hackknow.com/shop?category=templates',
+      why: 'Starts at ₹19 — pay once, use forever',
+    });
+  }
+  return recs.slice(0, 2);
+}
+
+// Pick the single most useful URL given intent + message
+function pickNextUrl(message, intent, recs) {
+  if (intent === 'support') return 'https://hackknow.com/contact';
+  if (intent === 'build') return 'https://yexcel.hackknow.com/dashboard';
+  if (recs.length > 0) return recs[0].url;
+  if (intent === 'browse') return 'https://hackknow.com/shop';
+  return null;
+}
+
+function shouldCrossSellYexcel(message, intent) {
+  const m = String(message || '').toLowerCase();
+  if (intent === 'build') return true;
+  if (/csv|raw data|make excel|build excel|quickly visual|sirf data hai/.test(m)) return true;
+  return false;
+}
+
 function deterministicTeacherReply(message) {
   const m = String(message || '').trim();
+  const intent = detectIntent(m);
+  const lang = /[ऀ-ॿ]/.test(m) ? 'hi' : /(kar|hai|kaise|nahi|kr|sab|kuch|chahiye|mujhe|hum|hamara|tumhe)/i.test(m) ? 'hinglish' : 'en';
+  const recs = recommendProducts(m, intent);
+  const crossSell = shouldCrossSellYexcel(m, intent);
+  const nextUrl = pickNextUrl(m, intent, recs);
+
   for (const lesson of FALLBACK_LESSONS) {
     if (lesson.match.test(m)) {
       return {
         reply: lesson.reply,
-        lang: /[ऀ-ॿ]/.test(m) ? 'hi' : /(kar|hai|kaise|nahi|kr|sab|kuch)/i.test(m) ? 'hinglish' : 'en',
-        level: 'beginner',
+        lang, level: 'beginner', intent,
         concepts_covered: lesson.concepts,
         follow_up_questions: lesson.follow_ups,
         suggested_shortcut: lesson.shortcut,
         homework: lesson.homework,
+        product_recommendations: recs,
+        cross_sell_yexcel: crossSell,
+        next_url: nextUrl,
       };
     }
   }
+
+  // Special-case: "Mujhe MIS chahiye" / "I need MIS" → discovery questions, no instant pitch
+  if (intent === 'buy' && /mis|monthly report|p\&?l/.test(m.toLowerCase())) {
+    return {
+      reply: lang === 'hi'
+        ? `नमस्ते 🌊 चलिए सही MIS template ढूँढते हैं। 4 छोटे सवाल:\n\n1. **उद्योग** — Manufacturing / Retail / Services / SaaS?\n2. **आवृत्ति** — दैनिक, साप्ताहिक, या मासिक रिपोर्ट?\n3. **पाठक** — आपका boss, board, या team?\n4. **मुख्य metric** — revenue, margin, inventory, AR aging?\n\nजवाब दीजिए — मैं top 2 templates suggest कर दूँगी।`
+        : lang === 'hinglish'
+        ? `Namaste 🌊 chaliye sahi MIS template dhundte hain. 4 chote sawal:\n\n1. **Industry** — Manufacturing / Retail / Services / SaaS?\n2. **Frequency** — daily, weekly, ya monthly report?\n3. **Audience** — aapka boss, board, ya team?\n4. **Key metrics** — revenue, margin, inventory, AR aging?\n\nJawab dijiye — main top 2 templates suggest kar dungi.`
+        : `Let me help you pick the right MIS template. Quick discovery:\n\n1. **Industry** — Manufacturing / Retail / Services / SaaS?\n2. **Frequency** — daily, weekly, or monthly report?\n3. **Audience** — your boss, board, or team?\n4. **Key metrics** — revenue, margin, inventory, AR aging?\n\nAnswer these and I'll recommend the top 2 templates that match.`,
+      lang, level: 'beginner', intent: 'buy',
+      concepts_covered: [],
+      follow_up_questions: lang === 'en' ? [
+        'I am a finance manager in a 50-cr manufacturing company — what MIS fits?',
+        'Show me the cheapest MIS template you have',
+        'Can I see a sample MIS dashboard?',
+      ] : [
+        'Mai 50-cr manufacturing company me finance manager hoon — konsa MIS chahiye?',
+        'Aapka sabse sasta MIS template kaunsa hai?',
+        'Sample MIS dashboard dikha sakte ho?',
+      ],
+      suggested_shortcut: null,
+      homework: null,
+      product_recommendations: recs,
+      cross_sell_yexcel: true,
+      next_url: 'https://hackknow.com/shop?category=mis-templates',
+    };
+  }
+
+  // Special-case: build intent → YExcel cross-sell
+  if (intent === 'build') {
+    return {
+      reply: lang === 'hi'
+        ? `अगर आपके पास CSV है और जल्दी से Excel dashboard चाहिए — Hackknow का free AI tool **YExcel** सबसे तेज़ रास्ता है।\n\n🔗 https://yexcel.hackknow.com/dashboard\n\nCSV drop करो — 30 seconds में working .xlsx मिलेगा with charts, KPIs, और एक **Excel Tutor sheet** भी जो हर formula explain करती है।\n\n100% free. कोई signup नहीं।`
+        : lang === 'hinglish'
+        ? `Agar aapke paas CSV hai aur jaldi se Excel dashboard chahiye — Hackknow ka free AI tool **YExcel** sabse tez raasta hai.\n\n🔗 https://yexcel.hackknow.com/dashboard\n\nCSV drop karo — 30 seconds mein working .xlsx milega with charts, KPIs, aur ek **Excel Tutor sheet** bhi jo har formula explain karti hai.\n\n100% free. No signup.`
+        : `If you have CSV data and want a dashboard fast, Hackknow's free AI tool **YExcel** is the quickest path.\n\n🔗 https://yexcel.hackknow.com/dashboard\n\nDrop the CSV — you'll get a working .xlsx in 30 seconds with charts, KPIs, AND an **Excel Tutor sheet** that explains every formula it used.\n\n100% free. No signup.`,
+      lang, level: 'beginner', intent: 'build',
+      concepts_covered: [],
+      follow_up_questions: [
+        lang === 'en' ? 'What formats does YExcel accept?' : 'YExcel kaunse formats accept karta hai?',
+        lang === 'en' ? 'Can YExcel use my dashboard image as a reference?' : 'Kya YExcel meri dashboard image as reference use kar sakta hai?',
+        lang === 'en' ? 'How many themes does YExcel have?' : 'YExcel mein kitne themes hain?',
+      ],
+      suggested_shortcut: 'Ctrl + T — convert range to Table before building',
+      homework: null,
+      product_recommendations: recs,
+      cross_sell_yexcel: true,
+      next_url: 'https://yexcel.hackknow.com/dashboard',
+    };
+  }
+
+  // Generic fallback (no specific lesson match)
   return {
-    reply: `Hi! I'm Yahavi — your free Excel teacher.
-
-Without an AI key I work in **offline mode** with a small library of canned lessons. Add a free **Groq** or **Gemini** key (settings panel) and I can answer any Excel question with full personalised teaching.
-
-Some things you can ask me right now in offline mode:
-- "How do I use VLOOKUP / XLOOKUP?"
-- "Show me SUMIFS"
-- "What is a PivotTable?"
-- "Which chart should I use?"
-- "Best Excel keyboard shortcuts"
-- "How do I design a dashboard?"
-
-Or just open **https://yexcel.hackknow.com** and drop a CSV — you'll get a working dashboard *plus* an Excel Tutor sheet inside the workbook that teaches you every formula it used, with examples from your own data.`,
-    lang: /[ऀ-ॿ]/.test(m) ? 'hi' : 'en',
-    level: 'beginner',
+    reply: lang === 'hi'
+      ? `नमस्ते 🌊 मैं हूँ **याहवी** — Hackknow की free Excel teacher।\n\nमैं समझाती हूँ formulas, shortcuts, charts, pivot tables, और dashboard design — step-by-step, English, हिंदी, या Hinglish में।\n\nपूछिए कुछ भी, जैसे:\n- VLOOKUP कैसे use करें?\n- SUMIFS example दिखाइए\n- Pivot table कैसे बनाएँ?\n- सबसे ज़रूरी Excel shortcuts?\n\nऔर अगर आपके पास CSV है तो हमारा free AI tool **YExcel** सीधे dashboard बना देता है: https://yexcel.hackknow.com/dashboard`
+      : `Hi 🌊 I'm **Yahavi** — Hackknow's free Excel teacher.\n\nI explain formulas, shortcuts, charts, pivot tables, and dashboard design — step by step, in English, Hindi, or Hinglish.\n\nAsk me anything, e.g.:\n- How do I use VLOOKUP / XLOOKUP?\n- Show me a SUMIFS example\n- What is a PivotTable?\n- Best Excel keyboard shortcuts\n\nAnd if you have CSV data, our free AI tool **YExcel** turns it into a working dashboard in 30 seconds: https://yexcel.hackknow.com/dashboard`,
+    lang, level: 'beginner', intent,
     concepts_covered: [],
-    follow_up_questions: [
+    follow_up_questions: lang === 'en' ? [
       'How do I use XLOOKUP?',
       'Show me a SUMIFS example',
       'What is a PivotTable?',
+    ] : [
+      'XLOOKUP kaise use karein?',
+      'SUMIFS ka ek example dikhaiye',
+      'Pivot table kya hai?',
     ],
     suggested_shortcut: 'Ctrl + T — convert range to Table',
     homework: null,
+    product_recommendations: recs,
+    cross_sell_yexcel: crossSell,
+    next_url: nextUrl,
   };
 }
 
@@ -3044,7 +3332,7 @@ export default {
         return await handleTeachHistory(request, env, parts);
       }
       if (parts[0] === 'api' && parts[1] === 'download') return await handleFileDownload(request, env, parts);
-      if (path === '/' || path === '/health') return jsonResponse({ status: 'ok', version: '3.2', features: ['xlsx', 'charts', 'tutor', 'deterministic-70-30', 'teacher-chat', 'progress', 'quiz', 'cheatsheet', 'practice-xlsx', 'bilingual-hi-en'] });
+      if (path === '/' || path === '/health') return jsonResponse({ status: 'ok', version: '3.3', features: ['xlsx', 'charts', 'tutor', 'deterministic-70-30', 'teacher-chat', 'progress', 'quiz', 'cheatsheet', 'practice-xlsx', 'bilingual-hi-en', 'upsell-cross-sell', 'navigation', 'intent-detection', 'multilingual-9-langs'] });
       return errorResponse('Not found', 404);
     } catch (e) {
       console.error(e);
