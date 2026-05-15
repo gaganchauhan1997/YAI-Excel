@@ -1763,6 +1763,1264 @@ async function handleFileDownload(request, env, parts) {
   });
 }
 
+// ── EXCEL TEACHER ─────────────────────────────────────────────────────────────
+// Conversational Excel tutor — multi-turn chat with a patient, encouraging
+// teacher persona. Speaks the user's language (English / Hindi / Hinglish),
+// uses Excel formulas with real examples, suggests keyboard shortcuts, and
+// adapts difficulty to the learner's level.
+
+const TEACHER_SYSTEM_PROMPT = `You are "Yahavi" (याहवी) — a warm, patient Excel teacher built by Hackknow. Your name means "river of knowledge" in Sanskrit. You combine the warmth of a college mentor with the precision of a Microsoft MVP, and your goal is to make every Indian professional fluent in Excel.
+
+CORE TEACHING PRINCIPLES:
+
+1. MEET THE LEARNER WHERE THEY ARE
+   Detect the language of the user's message and respond in the SAME register:
+   - English question → reply in English
+   - Hindi question (Devanagari script) → reply in Hindi
+   - Hinglish ("Excel mein VLOOKUP kaise use karein?") → reply in Hinglish (Hindi+English mix, Latin script)
+   Never lecture in a language they didn't ask in.
+
+2. SHOW, DON'T JUST TELL
+   For every formula or concept, give:
+   - A 1-line plain-language description
+   - The exact formula syntax in a code block
+   - A worked example with sample inputs and the expected output
+   - A keyboard shortcut if relevant
+   - ONE common mistake learners make
+
+3. PROGRESS BY THE LADDER OF DEPTH
+   - First answer the question in the SIMPLEST possible way (the "minimum viable answer")
+   - Then offer "deeper dive" follow-ups if the learner wants more
+   - Never overwhelm with 10 concepts when 1 will do
+
+4. CONNECT TO REAL WORK
+   When the learner mentions their data (CSV columns, business domain, role), tailor examples to that domain. A manufacturing learner gets SUMIFS over Plant + Month; a sales learner gets it over Region + Quarter.
+
+5. CELEBRATE PROGRESS
+   Acknowledge when they ask a good question. Reinforce when they make a clever choice. Excel can be intimidating — your tone is "you've got this".
+
+6. PRACTICAL EXCEL RANGE
+   You cover: formulas (XLOOKUP, INDEX/MATCH, SUMIFS, COUNTIFS, IF, IFS, IFERROR, dynamic arrays UNIQUE/SORT/FILTER, LET, LAMBDA), PivotTables, charts (when to use which type), conditional formatting, data validation, Power Query basics, Power Pivot basics, VBA macros (simple ones), keyboard shortcuts, dashboard design, financial modelling fundamentals.
+
+7. STAY IN SCOPE
+   If the learner asks something non-Excel ("write me a Python script", "tell me a joke about my boss"), politely redirect: "I'm trained on Excel specifically — back to your spreadsheet, that's where I shine." Don't refuse rudely; redirect.
+
+OUTPUT FORMAT (always return ONE valid JSON object, no markdown fences around the outer JSON):
+{
+  "reply": "<markdown body — multi-paragraph, with code blocks for formulas>",
+  "lang": "en|hi|hinglish",
+  "level": "beginner|intermediate|advanced — your read of the learner",
+  "concepts_covered": ["SUMIFS", "absolute references"],
+  "follow_up_questions": [
+    "Short question the learner might ask next",
+    "Another natural next question",
+    "A deeper question for when they're ready"
+  ],
+  "suggested_shortcut": "Ctrl+Shift+Enter — array formula entry (or null)",
+  "homework": "ONE tiny exercise the learner could try in their own sheet right now, or null"
+}
+
+EXAMPLES OF GREAT TEACHING MOMENTS:
+- "How do I sum only Plant A rows?" → SUMIFS with $-anchored ranges, example output, mention "drag this down" caveat
+- "VLOOKUP nahi mil raha" → Hinglish reply with XLOOKUP recommendation + INDEX/MATCH for older Excel
+- "What's a pivot table?" → minimum viable answer (3 sentences) + offer to walk through building one`;
+
+async function aiTeacherReply(keys, history, userMessage, dataContext = null) {
+  const messages = [];
+  // Build conversation history — last 8 turns is plenty for a teaching loop
+  for (const turn of (history || []).slice(-8)) {
+    if (turn.role === 'user' || turn.role === 'assistant') {
+      messages.push({ role: turn.role, content: turn.content });
+    }
+  }
+  // Append data context if provided
+  let userBlock = userMessage;
+  if (dataContext) {
+    userBlock = `[Context: the learner is currently working with a dataset that has these columns: ${JSON.stringify(dataContext.headers || [])}, ${dataContext.row_count || 0} rows. Their inferred domain is "${dataContext.domain || 'unknown'}". When suggesting formulas, prefer column names from this list so they can paste them directly.]\n\n${userMessage}`;
+  }
+  messages.push({ role: 'user', content: userBlock });
+
+  // Prefer Groq (faster + JSON mode), fall back to Gemini
+  if (keys.groq) {
+    try {
+      const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${keys.groq}` },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'system', content: TEACHER_SYSTEM_PROMPT }, ...messages],
+          max_tokens: 2048,
+          temperature: 0.4,
+          response_format: { type: 'json_object' },
+        }),
+      });
+      if (!resp.ok) throw new Error(`Groq ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+      const data = await resp.json();
+      return parseJSONLoose(data.choices?.[0]?.message?.content || '') || null;
+    } catch (e) {
+      console.error('Groq teacher failed:', e.message);
+    }
+  }
+  if (keys.gemini) {
+    try {
+      const flatHistory = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+      const prompt = `${TEACHER_SYSTEM_PROMPT}\n\nConversation so far:\n${flatHistory}\n\nReturn only the JSON.`;
+      const raw = await callGemini(keys.gemini, prompt);
+      return parseJSONLoose(raw) || null;
+    } catch (e) {
+      console.error('Gemini teacher failed:', e.message);
+    }
+  }
+  return null;
+}
+
+// Deterministic fallback teacher — keyword routing → canned helpful answer.
+// Triggered when no AI keys are available so users still get value.
+const FALLBACK_LESSONS = [
+  {
+    match: /(vlookup|xlookup|lookup|खोज)/i,
+    reply: `## Looking up values across sheets
+
+The modern way is **XLOOKUP** (Excel 365 / 2021+):
+
+\`\`\`
+=XLOOKUP(lookup_value, lookup_array, return_array, [if_not_found], [match_mode], [search_mode])
+\`\`\`
+
+Example — find an employee's salary by name:
+
+\`\`\`
+=XLOOKUP("Alice", A:A, C:C, "Not found")
+\`\`\`
+
+For older Excel, use INDEX/MATCH instead — it's more flexible than VLOOKUP:
+
+\`\`\`
+=INDEX(C:C, MATCH("Alice", A:A, 0))
+\`\`\`
+
+**Common mistake**: VLOOKUP only works left-to-right (lookup column must be left of return column). XLOOKUP and INDEX/MATCH have no such limit.`,
+    concepts: ['XLOOKUP', 'INDEX/MATCH', 'VLOOKUP'],
+    follow_ups: ['How is XLOOKUP different from VLOOKUP?', 'What does the if_not_found argument do?', 'Show me a 2-criteria lookup'],
+    shortcut: 'F4 — toggle absolute references inside a formula',
+    homework: 'In your own data, replace one VLOOKUP with XLOOKUP and add an "if_not_found" message.',
+  },
+  {
+    match: /(sumif|sum.{0,3}if|conditional.{0,3}sum|sum krna)/i,
+    reply: `## Conditional sums — the SUMIFS workhorse
+
+\`\`\`
+=SUMIFS(sum_range, criteria_range1, criteria1, [criteria_range2, criteria2], ...)
+\`\`\`
+
+Example — total revenue for Plant A in January:
+
+\`\`\`
+=SUMIFS(Revenue, Plant, "A", Month, "Jan")
+\`\`\`
+
+**The order is reversed from SUMIF.** SUMIFS asks for the sum column FIRST, then pairs of (criteria_range, criteria). Easy to get wrong — F1 SUMIFS to remind yourself anytime.
+
+For counting rows that match, use **COUNTIFS** (same syntax pattern, no sum_range argument).`,
+    concepts: ['SUMIFS', 'COUNTIFS'],
+    follow_ups: ['How do I sum with two conditions?', 'What\'s the difference between SUMIF and SUMIFS?', 'Can SUMIFS use date ranges?'],
+    shortcut: 'Alt + = — auto-sum the column above',
+    homework: 'Pick a category in your sheet and write a SUMIFS that totals one metric just for that category.',
+  },
+  {
+    match: /(pivot|pivot table)/i,
+    reply: `## PivotTables in 3 sentences
+
+A PivotTable is a drag-and-drop summary of your raw data — you pick which column becomes rows, which becomes columns, and which gets summed/counted. Excel keeps the source intact and shows you the aggregated view.
+
+To create one: select your data → **Insert → PivotTable** → drag column names into the Rows, Columns, Values boxes.
+
+**Pro tip**: Convert your data to a Table first (**Ctrl + T**) so the PivotTable auto-extends when you add rows.`,
+    concepts: ['PivotTable', 'Table'],
+    follow_ups: ['How do I refresh a PivotTable?', 'Show me how to add a slicer', 'Can I use a formula inside a PivotTable?'],
+    shortcut: 'Ctrl + T — convert range to Table',
+    homework: 'Insert a PivotTable from your data; drag your biggest categorical column to Rows and your top metric to Values.',
+  },
+  {
+    match: /(chart|graph|visuali[sz]e)/i,
+    reply: `## Which chart should I use?
+
+Quick decision tree:
+
+- **Compare totals across categories** → vertical bar
+- **Rank entities** (long labels) → horizontal bar
+- **Show a share of total** (3-8 slices) → doughnut or pie
+- **Trend over time** → line; if stacked, stacked column
+- **Correlate two metrics** → scatter
+- **One value vs target** → bullet or gauge
+
+**Insert a default chart in 1 click**: select your range → **Alt + F1**.`,
+    concepts: ['Chart selection', 'Chart insertion'],
+    follow_ups: ['How do I add a secondary axis?', 'How do I change chart colors?', 'Can I combine a bar and line chart?'],
+    shortcut: 'Alt + F1 — instant chart',
+    homework: 'Select your top 5 categories and one metric, hit Alt + F1, then change it to a horizontal bar with a right-click.',
+  },
+  {
+    match: /(shortcut|keyboard|fastest)/i,
+    reply: `## Top 10 Excel shortcuts that pay off forever
+
+1. **Ctrl + T** — convert range to Table (auto-extends formulas + chart sources)
+2. **Ctrl + Shift + L** — toggle filters
+3. **Ctrl + Shift + Arrow** — select to end of contiguous block
+4. **Ctrl + ;** — insert today's date as a value
+5. **F4** — toggle absolute / relative references ($A$1 ↔ A$1 ↔ $A1 ↔ A1)
+6. **Alt + =** — auto-sum
+7. **Alt + F1** — insert default chart
+8. **Ctrl + Shift + Enter** — array formula (legacy Excel)
+9. **Ctrl + Page Up/Down** — switch sheets
+10. **F2** — edit cell in place`,
+    concepts: ['Keyboard shortcuts'],
+    follow_ups: ['Shortcut to lock a cell reference?', 'How do I open the Name Manager via keyboard?', 'Show me Mac equivalents'],
+    shortcut: 'F4 — universal reference toggler',
+    homework: 'Try Ctrl+T on your data range right now. Watch your formulas auto-update.',
+  },
+  {
+    match: /(dashboard|kpi|design)/i,
+    reply: `## How great dashboards are built
+
+A working Excel dashboard has 4 layers, top to bottom:
+
+1. **Title bar** — name + period + (optional) brand
+2. **3-5 KPI cards** — biggest numbers, smallest text labels above them. Currency / compact / percent format
+3. **3-4 detail charts** — answer the "why" behind each KPI
+4. **1 wide timeline chart** at the bottom — the story over time
+
+**Design rule of thumb**: use ONE accent color, generous white space, never more than 3 fonts. The reader should "get it" in 5 seconds.
+
+Want to try? Open **https://yexcel.hackknow.com** — upload any CSV, get a working dashboard back instantly, with a free Excel Tutor sheet that teaches every formula it used.`,
+    concepts: ['Dashboard design', 'KPI cards'],
+    follow_ups: ['How big should the KPI font be?', 'What\'s the best chart for monthly trend?', 'How do I add slicers to my dashboard?'],
+    shortcut: 'Ctrl + 1 — open Format Cells dialog (KPI formatting)',
+    homework: 'Pick 3 numbers from your sheet that matter and turn them into 3 large cells with bold accents — your first KPI cards.',
+  },
+];
+
+function deterministicTeacherReply(message) {
+  const m = String(message || '').trim();
+  for (const lesson of FALLBACK_LESSONS) {
+    if (lesson.match.test(m)) {
+      return {
+        reply: lesson.reply,
+        lang: /[ऀ-ॿ]/.test(m) ? 'hi' : /(kar|hai|kaise|nahi|kr|sab|kuch)/i.test(m) ? 'hinglish' : 'en',
+        level: 'beginner',
+        concepts_covered: lesson.concepts,
+        follow_up_questions: lesson.follow_ups,
+        suggested_shortcut: lesson.shortcut,
+        homework: lesson.homework,
+      };
+    }
+  }
+  return {
+    reply: `Hi! I'm Yahavi — your free Excel teacher.
+
+Without an AI key I work in **offline mode** with a small library of canned lessons. Add a free **Groq** or **Gemini** key (settings panel) and I can answer any Excel question with full personalised teaching.
+
+Some things you can ask me right now in offline mode:
+- "How do I use VLOOKUP / XLOOKUP?"
+- "Show me SUMIFS"
+- "What is a PivotTable?"
+- "Which chart should I use?"
+- "Best Excel keyboard shortcuts"
+- "How do I design a dashboard?"
+
+Or just open **https://yexcel.hackknow.com** and drop a CSV — you'll get a working dashboard *plus* an Excel Tutor sheet inside the workbook that teaches you every formula it used, with examples from your own data.`,
+    lang: /[ऀ-ॿ]/.test(m) ? 'hi' : 'en',
+    level: 'beginner',
+    concepts_covered: [],
+    follow_up_questions: [
+      'How do I use XLOOKUP?',
+      'Show me a SUMIFS example',
+      'What is a PivotTable?',
+    ],
+    suggested_shortcut: 'Ctrl + T — convert range to Table',
+    homework: null,
+  };
+}
+
+async function handleTeach(request, env) {
+  const body = await request.json();
+  const {
+    message = '',
+    history = [],
+    session_id = null,
+    data_token = null,  // optional — links to an existing upload for richer context
+  } = body;
+  const groqKey = (body.groq_api_key || '').toString();
+  const geminiKey = (body.gemini_api_key || '').toString();
+  const keys = { groq: groqKey, gemini: geminiKey };
+
+  if (!message || !message.trim()) return errorResponse('Empty message');
+
+  // Optionally enrich with the user's uploaded dataset context
+  let dataContext = null;
+  if (data_token) {
+    const stored = await env.YAI_KV.get(`upload:${data_token}`);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      dataContext = {
+        headers: parsed.headers,
+        row_count: parsed.rowCount,
+        domain: guessDomain(parsed.headers),
+      };
+    }
+  }
+
+  // Try AI teacher; fall back to deterministic lessons.
+  let result = await aiTeacherReply(keys, history, message, dataContext);
+  if (!result) result = deterministicTeacherReply(message);
+
+  // Generate a session id if not supplied so the frontend can resume
+  const sid = session_id || generateUUID();
+
+  // Persist the latest turn in KV (best-effort, 24h TTL) so the user
+  // can pick up where they left off across reloads.
+  try {
+    const newHistory = [...(history || []), { role: 'user', content: message }, { role: 'assistant', content: result.reply }];
+    await env.YAI_KV.put(`teach:${sid}`, JSON.stringify({ history: newHistory.slice(-20), ts: Date.now() }), { expirationTtl: 86400 });
+  } catch (e) {
+    console.error('teach persistence failed:', e.message);
+  }
+
+  return jsonResponse({
+    session_id: sid,
+    ai_used: !!(keys.groq || keys.gemini),
+    ...result,
+  });
+}
+
+async function handleTeachHistory(request, env, parts) {
+  const sid = parts[2];
+  if (!sid) return errorResponse('Missing session id');
+  const stored = await env.YAI_KV.get(`teach:${sid}`);
+  if (!stored) return jsonResponse({ session_id: sid, history: [] });
+  return jsonResponse({ session_id: sid, ...JSON.parse(stored) });
+}
+
+// ── PROGRESS TRACKING ────────────────────────────────────────────────────────
+// Per-session learner profile. Tracks concepts seen, concepts mastered (via quiz),
+// quizzes taken, current level, streak. Keyed by session_id in KV.
+
+const FUNDAMENTAL_CONCEPTS = [
+  // Tier 1 — beginner foundations
+  { id: 'cell-references', name: 'Cell References', tier: 1, name_hi: 'सेल रेफरेन्स' },
+  { id: 'sum-avg-count', name: 'SUM / AVERAGE / COUNT', tier: 1, name_hi: 'योग, औसत, गिनती' },
+  { id: 'absolute-refs', name: 'Absolute vs Relative References ($)', tier: 1, name_hi: 'पूर्ण बनाम सापेक्ष रेफरेन्स' },
+  { id: 'formatting', name: 'Number / Currency / Percent Formatting', tier: 1, name_hi: 'संख्या स्वरूपण' },
+  { id: 'shortcuts-basic', name: 'Basic Keyboard Shortcuts', tier: 1, name_hi: 'बुनियादी शॉर्टकट्स' },
+  // Tier 2 — intermediate
+  { id: 'sumifs', name: 'SUMIFS / COUNTIFS / AVERAGEIFS', tier: 2, name_hi: 'शर्ती योग' },
+  { id: 'xlookup', name: 'XLOOKUP / INDEX-MATCH', tier: 2, name_hi: 'XLOOKUP / INDEX-MATCH' },
+  { id: 'if-iferror', name: 'IF / IFS / IFERROR', tier: 2, name_hi: 'IF / IFS / IFERROR' },
+  { id: 'tables', name: 'Tables (Ctrl+T) & Structured References', tier: 2, name_hi: 'टेबल्स और संरचित संदर्भ' },
+  { id: 'charts-basic', name: 'Chart Types (Bar, Pie, Line)', tier: 2, name_hi: 'चार्ट के प्रकार' },
+  // Tier 3 — advanced
+  { id: 'pivots', name: 'PivotTables & Slicers', tier: 3, name_hi: 'पिवट टेबल और स्लाइसर' },
+  { id: 'dynamic-arrays', name: 'UNIQUE / SORT / FILTER / SEQUENCE', tier: 3, name_hi: 'डायनामिक एरे फ़ंक्शन' },
+  { id: 'conditional-format', name: 'Conditional Formatting', tier: 3, name_hi: 'शर्तीय स्वरूपण' },
+  { id: 'date-functions', name: 'Date Intelligence (EOMONTH, NETWORKDAYS)', tier: 3, name_hi: 'दिनांक फ़ंक्शन' },
+  { id: 'dashboard-design', name: 'Dashboard Design Principles', tier: 3, name_hi: 'डैशबोर्ड डिज़ाइन' },
+  // Tier 4 — pro
+  { id: 'power-query', name: 'Power Query Basics', tier: 4, name_hi: 'पावर क्वेरी' },
+  { id: 'power-pivot', name: 'Power Pivot & DAX Basics', tier: 4, name_hi: 'पावर पिवट और DAX' },
+  { id: 'lambda-let', name: 'LAMBDA / LET (Custom Functions)', tier: 4, name_hi: 'कस्टम फ़ंक्शन' },
+  { id: 'vba-basic', name: 'VBA Macros (Beginner)', tier: 4, name_hi: 'VBA मैक्रो' },
+];
+
+function emptyProgress(sid) {
+  return {
+    session_id: sid,
+    name: null,
+    language: 'en',
+    level: 'beginner',
+    xp: 0,
+    streak_days: 0,
+    last_active: Date.now(),
+    seen: [],           // concept_ids that the learner has been exposed to
+    mastered: [],       // concept_ids the learner answered correctly in a quiz
+    quizzes_taken: 0,
+    quizzes_passed: 0,
+    badges: [],         // ["first-quiz", "tier-1-cleared", "streak-7", ...]
+  };
+}
+
+async function loadProgress(env, sid) {
+  if (!sid) return null;
+  const v = await env.YAI_KV.get(`progress:${sid}`);
+  if (!v) return emptyProgress(sid);
+  try { return JSON.parse(v); } catch { return emptyProgress(sid); }
+}
+
+async function saveProgress(env, sid, progress) {
+  await env.YAI_KV.put(`progress:${sid}`, JSON.stringify(progress), { expirationTtl: 90 * 24 * 3600 });
+}
+
+function progressLevel(progress) {
+  const masteredTiers = new Set();
+  for (const id of progress.mastered || []) {
+    const concept = FUNDAMENTAL_CONCEPTS.find(c => c.id === id);
+    if (concept) masteredTiers.add(concept.tier);
+  }
+  if (masteredTiers.has(4)) return 'pro';
+  if (masteredTiers.has(3)) return 'advanced';
+  if (masteredTiers.has(2)) return 'intermediate';
+  return 'beginner';
+}
+
+function awardBadges(progress) {
+  const has = (b) => progress.badges.includes(b);
+  if (progress.quizzes_taken >= 1 && !has('first-quiz')) progress.badges.push('first-quiz');
+  if (progress.quizzes_passed >= 5 && !has('quiz-streak-5')) progress.badges.push('quiz-streak-5');
+  if (progress.mastered.length >= 5 && !has('5-concepts')) progress.badges.push('5-concepts');
+  if (progress.mastered.length >= 10 && !has('10-concepts')) progress.badges.push('10-concepts');
+  // tier-cleared badges
+  for (const tier of [1, 2, 3, 4]) {
+    const tierConcepts = FUNDAMENTAL_CONCEPTS.filter(c => c.tier === tier).map(c => c.id);
+    const cleared = tierConcepts.every(id => progress.mastered.includes(id));
+    if (cleared && !has(`tier-${tier}-cleared`)) progress.badges.push(`tier-${tier}-cleared`);
+  }
+  return progress;
+}
+
+async function handleProgress(request, env, parts) {
+  const sid = parts[3] || new URL(request.url).searchParams.get('session_id');
+  if (!sid) return errorResponse('Missing session id');
+  const progress = await loadProgress(env, sid);
+  progress.level = progressLevel(progress);
+  // Compute concept coverage
+  const tiers = [1, 2, 3, 4].map(tier => {
+    const tierConcepts = FUNDAMENTAL_CONCEPTS.filter(c => c.tier === tier);
+    const masteredInTier = tierConcepts.filter(c => progress.mastered.includes(c.id)).length;
+    const seenInTier = tierConcepts.filter(c => progress.seen.includes(c.id)).length;
+    return {
+      tier,
+      total: tierConcepts.length,
+      mastered: masteredInTier,
+      seen: seenInTier,
+      percent: Math.round((masteredInTier / tierConcepts.length) * 100),
+      concepts: tierConcepts.map(c => ({
+        ...c,
+        status: progress.mastered.includes(c.id) ? 'mastered'
+              : progress.seen.includes(c.id) ? 'seen' : 'locked',
+      })),
+    };
+  });
+  return jsonResponse({ ...progress, tiers, all_concepts: FUNDAMENTAL_CONCEPTS });
+}
+
+// ── QUIZ ──────────────────────────────────────────────────────────────────────
+// Generate a 5-question multi-choice quiz that probes fundamentals. AI-backed
+// when keys are present; otherwise served from a static bank.
+
+const QUIZ_BANK = {
+  'cell-references': [
+    {
+      q: 'In Excel, what does the formula =A1+B1 calculate?',
+      q_hi: 'Excel में =A1+B1 क्या गणना करता है?',
+      options: ['Sum of cells A1 and B1', 'Difference A1 minus B1', 'Concatenation of A1 and B1', 'Multiplication of A1 and B1'],
+      correct: 0,
+      explain: 'The + operator adds the numeric values in cells A1 and B1.',
+    },
+  ],
+  'sum-avg-count': [
+    {
+      q: 'Which function returns the arithmetic mean of a range?',
+      q_hi: 'कौन सा फ़ंक्शन एक रेंज का औसत निकालता है?',
+      options: ['SUM', 'AVERAGE', 'MEDIAN', 'COUNT'],
+      correct: 1,
+      explain: 'AVERAGE returns the mean. MEDIAN returns the middle value, COUNT counts numeric cells.',
+    },
+    {
+      q: '=COUNTA(A1:A10) does what?',
+      q_hi: '=COUNTA(A1:A10) क्या करता है?',
+      options: ['Counts numeric cells only', 'Counts non-empty cells (including text)', 'Counts empty cells', 'Sums all values'],
+      correct: 1,
+      explain: 'COUNTA counts every non-empty cell; COUNT counts only numeric ones; COUNTBLANK counts empties.',
+    },
+  ],
+  'absolute-refs': [
+    {
+      q: 'You copy =A1*$B$1 from row 1 to row 5. Which reference changes?',
+      q_hi: 'आप =A1*$B$1 को पंक्ति 1 से 5 में कॉपी करें। कौन सा संदर्भ बदलेगा?',
+      options: ['Both', 'Only A1 → A5', 'Only $B$1 → $B$5', 'Neither'],
+      correct: 1,
+      explain: 'The $ signs lock B1 (absolute). A1 is relative — it shifts to A5 when copied down.',
+    },
+    {
+      q: 'Which key toggles between A1, $A$1, A$1, $A1 inside a formula?',
+      q_hi: 'फ़ॉर्मूला में A1, $A$1, A$1, $A1 के बीच कौन सी key स्विच करती है?',
+      options: ['F2', 'F4', 'F9', 'Ctrl+F'],
+      correct: 1,
+      explain: 'Place the cursor on a reference in the formula bar and press F4 to cycle through.',
+    },
+  ],
+  'shortcuts-basic': [
+    {
+      q: 'Which shortcut inserts today\'s date as a static value?',
+      q_hi: 'कौन सा शॉर्टकट आज की तारीख डालता है (फ़ंक्शन नहीं, स्थिर मान)?',
+      options: ['Ctrl + ;', 'Ctrl + T', '=TODAY()', 'Ctrl + Shift + ;'],
+      correct: 0,
+      explain: 'Ctrl + ; inserts the date. Ctrl + Shift + ; inserts the current time. =TODAY() updates every day.',
+    },
+    {
+      q: 'Ctrl + Shift + L does what?',
+      q_hi: 'Ctrl + Shift + L क्या करता है?',
+      options: ['Locks cells', 'Toggles filter buttons on/off', 'Inserts a chart', 'Opens VBA editor'],
+      correct: 1,
+      explain: 'It toggles the filter dropdowns on your header row — the fastest way to slice data.',
+    },
+  ],
+  'sumifs': [
+    {
+      q: 'What\'s the correct order of arguments for SUMIFS?',
+      q_hi: 'SUMIFS का सही क्रम क्या है?',
+      options: [
+        'SUMIFS(criteria_range, criteria, sum_range)',
+        'SUMIFS(sum_range, criteria_range1, criteria1, …)',
+        'SUMIFS(range, criteria)',
+        'SUMIFS(criteria, sum_range)',
+      ],
+      correct: 1,
+      explain: 'SUMIFS asks for the SUM column FIRST, then pairs of (range, criterion). This is the reverse of SUMIF.',
+    },
+    {
+      q: '=SUMIFS(Revenue, Plant, "A", Month, "Jan") gives:',
+      q_hi: '=SUMIFS(Revenue, Plant, "A", Month, "Jan") क्या देगा?',
+      options: [
+        'Revenue total for Plant A across all months',
+        'Revenue total for January across all plants',
+        'Revenue total only when Plant=A AND Month=Jan',
+        'An error — too many arguments',
+      ],
+      correct: 2,
+      explain: 'SUMIFS only sums rows where ALL criteria match (logical AND).',
+    },
+  ],
+  'xlookup': [
+    {
+      q: 'XLOOKUP vs VLOOKUP — which is true?',
+      q_hi: 'XLOOKUP बनाम VLOOKUP — कौन सा सत्य है?',
+      options: [
+        'XLOOKUP only works in Excel 2003+',
+        'XLOOKUP can search left of the key column; VLOOKUP cannot',
+        'VLOOKUP is faster than XLOOKUP',
+        'XLOOKUP requires the data to be sorted',
+      ],
+      correct: 1,
+      explain: 'XLOOKUP works in any direction. VLOOKUP can only return values to the right of the lookup column.',
+    },
+  ],
+  'if-iferror': [
+    {
+      q: 'What does =IFERROR(A1/B1, 0) do?',
+      q_hi: '=IFERROR(A1/B1, 0) क्या करता है?',
+      options: [
+        'Always returns 0',
+        'Divides A1 by B1; returns 0 if the division errors (e.g. B1=0)',
+        'Returns A1/B1 rounded to 0 decimals',
+        'Returns an error if A1=0',
+      ],
+      correct: 1,
+      explain: 'IFERROR wraps any formula. If the formula returns an error, IFERROR returns your fallback (0 here).',
+    },
+  ],
+  'pivots': [
+    {
+      q: 'Where do you drag a column to summarise its values (sum, average, count)?',
+      q_hi: 'मान सारांश के लिए कॉलम कहाँ खींचें (योग, औसत, गिनती)?',
+      options: ['Filters', 'Rows', 'Columns', 'Values'],
+      correct: 3,
+      explain: 'The Values area is where aggregations happen. Rows/Columns are dimensions, Filters slice the whole pivot.',
+    },
+  ],
+  'dynamic-arrays': [
+    {
+      q: '=UNIQUE(A1:A100) does what?',
+      q_hi: '=UNIQUE(A1:A100) क्या करता है?',
+      options: [
+        'Returns the count of unique values',
+        'Spills a list of distinct values from the range',
+        'Removes duplicates from the source data',
+        'Returns TRUE if all values are unique',
+      ],
+      correct: 1,
+      explain: 'UNIQUE is a dynamic array — it spills the distinct list. Source data is untouched.',
+    },
+  ],
+  'tables': [
+    {
+      q: 'Ctrl + T does what?',
+      q_hi: 'Ctrl + T क्या करता है?',
+      options: [
+        'Inserts a Table from the selected range',
+        'Inserts a Pivot Table',
+        'Inserts a Text box',
+        'Switches to the next worksheet',
+      ],
+      correct: 0,
+      explain: 'Converts a range to a Table. Tables auto-extend formulas and chart sources as rows are added.',
+    },
+  ],
+  'date-functions': [
+    {
+      q: 'What does =EOMONTH(A1, 0) return?',
+      q_hi: '=EOMONTH(A1, 0) क्या देता है?',
+      options: [
+        'The first day of the month of A1',
+        'The last day of the month of A1',
+        'The last day of the previous month',
+        'The last day of next year',
+      ],
+      correct: 1,
+      explain: '=EOMONTH(date, 0) → last day of current month. -1 = previous month, +1 = next month.',
+    },
+  ],
+};
+
+function pickRandom(arr, n) {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
+async function aiQuizGenerate(keys, conceptIds, language = 'en') {
+  if (!keys.groq && !keys.gemini) return null;
+  const conceptList = conceptIds.map(id => {
+    const c = FUNDAMENTAL_CONCEPTS.find(x => x.id === id);
+    return c ? `${c.id} (${c.name})` : id;
+  }).join(', ');
+  const prompt = `Generate a 5-question Excel multiple-choice quiz covering these concepts: ${conceptList}.
+
+For each question:
+- Be specific and testable (not "Excel is useful?")
+- Include 4 plausible options with ONE clearly correct
+- Provide a 1-2 sentence explanation of why the correct answer is right
+
+Language: ${language === 'hi' ? 'Hindi (Devanagari)' : language === 'hinglish' ? 'Hinglish (Hindi+English, Latin script)' : 'English'}
+
+Return ONLY this JSON shape (no markdown fences):
+{
+  "questions": [
+    {
+      "concept_id": "<one of the concept ids you were given>",
+      "q": "the question text in the requested language",
+      "options": ["opt A", "opt B", "opt C", "opt D"],
+      "correct": 0,
+      "explain": "why option 'correct' is right"
+    }
+  ]
+}`;
+  try {
+    const raw = keys.groq
+      ? await callGroq(keys.groq, prompt, 'Return valid JSON only.')
+      : await callGemini(keys.gemini, prompt);
+    return parseJSONLoose(raw);
+  } catch (e) {
+    console.error('AI quiz failed:', e.message);
+    return null;
+  }
+}
+
+async function handleQuizStart(request, env) {
+  const body = await request.json();
+  const { session_id, language = 'en', focus_tier = null } = body;
+  const keys = { groq: (body.groq_api_key || '').toString(), gemini: (body.gemini_api_key || '').toString() };
+
+  let sid = session_id;
+  if (!sid) sid = generateUUID();
+  const progress = await loadProgress(env, sid);
+
+  // Pick 5 concepts: prefer seen-but-not-mastered, otherwise next tier
+  let pool = FUNDAMENTAL_CONCEPTS;
+  if (focus_tier) pool = pool.filter(c => c.tier === Number(focus_tier));
+  const candidates = pool.filter(c => !progress.mastered.includes(c.id));
+  const picks = pickRandom(candidates.length ? candidates : pool, 5);
+  const pickedIds = picks.map(p => p.id);
+
+  // Try AI for fresh questions; fall back to QUIZ_BANK
+  let questions = null;
+  const aiQuiz = await aiQuizGenerate(keys, pickedIds, language);
+  if (aiQuiz && Array.isArray(aiQuiz.questions) && aiQuiz.questions.length) {
+    questions = aiQuiz.questions.slice(0, 5);
+  } else {
+    questions = [];
+    for (const id of pickedIds) {
+      const bank = QUIZ_BANK[id] || [];
+      const q = pickRandom(bank, 1)[0];
+      if (q) {
+        questions.push({
+          concept_id: id,
+          q: language === 'hi' ? (q.q_hi || q.q) : q.q,
+          options: q.options,
+          correct: q.correct,
+          explain: q.explain,
+        });
+      }
+    }
+    // If bank had fewer than 5 (some concepts have no canned q), pad with generic
+    while (questions.length < 5 && pickedIds.length > questions.length) {
+      const id = pickedIds[questions.length];
+      questions.push({
+        concept_id: id,
+        q: `Pick the best description of "${FUNDAMENTAL_CONCEPTS.find(c => c.id === id)?.name || id}":`,
+        options: [
+          'A specific Excel feature with a unique formula',
+          'A keyboard-only shortcut',
+          'Only available in Office 365',
+          'A built-in Excel concept worth learning',
+        ],
+        correct: 3,
+        explain: 'Best to study this concept in Yahavi chat — ask "teach me about ' + id + '".',
+      });
+    }
+  }
+
+  // Store the quiz attempt — needed so /submit can verify correctness
+  const quizId = generateUUID();
+  await env.YAI_KV.put(`quiz:${quizId}`, JSON.stringify({
+    session_id: sid, questions, language, created: Date.now(),
+  }), { expirationTtl: 3600 });
+
+  // Strip the correct answers before sending to client
+  const safeQuestions = questions.map((q, i) => ({
+    index: i,
+    concept_id: q.concept_id,
+    q: q.q,
+    options: q.options,
+  }));
+
+  return jsonResponse({
+    quiz_id: quizId,
+    session_id: sid,
+    language,
+    questions: safeQuestions,
+    total: safeQuestions.length,
+  });
+}
+
+async function handleQuizSubmit(request, env) {
+  const body = await request.json();
+  const { quiz_id, answers } = body;
+  if (!quiz_id || !Array.isArray(answers)) return errorResponse('quiz_id and answers required');
+
+  const stored = await env.YAI_KV.get(`quiz:${quiz_id}`);
+  if (!stored) return errorResponse('Quiz expired or invalid', 404);
+  const { session_id, questions } = JSON.parse(stored);
+
+  let progress = await loadProgress(env, session_id);
+  const results = questions.map((q, i) => {
+    const ans = answers[i];
+    const correct = ans === q.correct;
+    // Mark this concept as seen on any attempt
+    if (!progress.seen.includes(q.concept_id)) progress.seen.push(q.concept_id);
+    return {
+      concept_id: q.concept_id,
+      your_answer: ans,
+      correct_answer: q.correct,
+      is_correct: correct,
+      explain: q.explain,
+      options: q.options,
+      q: q.q,
+    };
+  });
+  const score = results.filter(r => r.is_correct).length;
+  const pct = Math.round((score / results.length) * 100);
+  const passed = pct >= 60;
+
+  // Promote concepts to "mastered" if the learner got that concept right
+  for (const r of results) {
+    if (r.is_correct && !progress.mastered.includes(r.concept_id)) {
+      progress.mastered.push(r.concept_id);
+    }
+  }
+  progress.quizzes_taken = (progress.quizzes_taken || 0) + 1;
+  if (passed) progress.quizzes_passed = (progress.quizzes_passed || 0) + 1;
+  progress.xp = (progress.xp || 0) + score * 10;
+  progress.last_active = Date.now();
+  progress.level = progressLevel(progress);
+  progress = awardBadges(progress);
+
+  await saveProgress(env, session_id, progress);
+
+  return jsonResponse({
+    score, total: results.length, percent: pct, passed,
+    results,
+    new_level: progress.level,
+    new_xp: progress.xp,
+    new_badges: progress.badges,
+    next_action: passed ? 'Take another quiz to climb the next tier' : 'Chat with Yahavi about the questions you missed',
+  });
+}
+
+// ── CHEAT SHEET XLSX ─────────────────────────────────────────────────────────
+// Generates a downloadable .xlsx cheat sheet covering formulas, shortcuts,
+// chart recipes — bilingual labels (English + Hindi). Uses the same XLSX
+// infrastructure as the dashboard pipeline.
+
+const CHEAT_FORMULAS = [
+  // [Formula, Description (en), Description (hi)]
+  ['SUM', '=SUM(range)', 'Adds numbers', 'संख्याओं को जोड़ता है'],
+  ['AVERAGE', '=AVERAGE(range)', 'Arithmetic mean', 'अंकगणितीय औसत'],
+  ['COUNT', '=COUNT(range)', 'Counts numeric cells', 'संख्यात्मक सेल गिनता है'],
+  ['COUNTA', '=COUNTA(range)', 'Counts non-empty cells', 'भरे हुए सेल गिनता है'],
+  ['MAX / MIN', '=MAX(range) · =MIN(range)', 'Largest / smallest', 'सबसे बड़ा / सबसे छोटा'],
+  ['ROUND', '=ROUND(num, 2)', 'Round to N decimals', 'दशमलव तक गोल'],
+  ['SUMIFS', '=SUMIFS(sum_range, c_range1, c1, c_range2, c2)', 'Conditional sum (AND)', 'शर्ती योग (AND)'],
+  ['COUNTIFS', '=COUNTIFS(c_range1, c1, c_range2, c2)', 'Conditional count', 'शर्ती गिनती'],
+  ['AVERAGEIFS', '=AVERAGEIFS(avg_range, c_range, c)', 'Conditional average', 'शर्ती औसत'],
+  ['IF', '=IF(condition, true_val, false_val)', 'Branch on a condition', 'शर्त पर शाखा'],
+  ['IFS', '=IFS(test1, val1, test2, val2, …)', 'Multiple conditions without nesting', 'कई शर्तें बिना नेस्टिंग'],
+  ['IFERROR', '=IFERROR(formula, fallback)', 'Replace errors with a fallback', 'त्रुटि की जगह fallback'],
+  ['SWITCH', '=SWITCH(expr, v1, r1, v2, r2, default)', 'Pick a result by matching values', 'मानों के अनुसार उत्तर चुनें'],
+  ['XLOOKUP', '=XLOOKUP(lookup, lookup_range, return_range, [if_not_found])', 'Modern lookup', 'आधुनिक lookup'],
+  ['INDEX/MATCH', '=INDEX(return_range, MATCH(lookup, lookup_range, 0))', 'Classic universal lookup', 'क्लासिक lookup'],
+  ['VLOOKUP', '=VLOOKUP(lookup, table, col_index, FALSE)', 'Vertical lookup (legacy)', 'लंबवत lookup (पुराना)'],
+  ['UNIQUE', '=UNIQUE(range)', 'Distinct values (spill)', 'अद्वितीय मान'],
+  ['SORT', '=SORT(range, [sort_index], [order])', 'Sorted version of a range', 'क्रम में लगाए गए मान'],
+  ['FILTER', '=FILTER(range, condition_array)', 'Rows matching a condition', 'शर्त के अनुसार पंक्तियाँ'],
+  ['SEQUENCE', '=SEQUENCE(rows, cols, start, step)', 'Auto-numbered grid', 'संख्या क्रम'],
+  ['LEN', '=LEN(text)', 'Character count of text', 'टेक्स्ट के अक्षर'],
+  ['LEFT / RIGHT / MID', '=LEFT(text, n) · =RIGHT(text, n) · =MID(text, start, n)', 'Sub-string extract', 'उप-स्ट्रिंग निकालें'],
+  ['CONCAT / TEXTJOIN', '=CONCAT(a, b) · =TEXTJOIN(", ", TRUE, range)', 'Combine text values', 'टेक्स्ट जोड़ें'],
+  ['TEXT', '=TEXT(value, "#,##0.0,\\"K\\"")', 'Format numbers as styled text', 'संख्या को स्वरूपित टेक्स्ट'],
+  ['TODAY / NOW', '=TODAY() · =NOW()', 'Today\'s date / current timestamp', 'आज की तारीख / समय'],
+  ['EOMONTH', '=EOMONTH(date, 0)', 'Last day of the current month', 'महीने का अंतिम दिन'],
+  ['NETWORKDAYS', '=NETWORKDAYS(start, end, [holidays])', 'Business days between dates', 'कार्य दिवस गिनती'],
+  ['LET', '=LET(name, value, formula)', 'Reuse intermediate values', 'मध्यवर्ती मान को फिर से उपयोग'],
+  ['LAMBDA', '=LAMBDA(x, y, x*y)(3, 4)', 'Define a reusable function', 'पुनःप्रयोज्य फ़ंक्शन परिभाषित करें'],
+];
+
+const CHEAT_SHORTCUTS = [
+  ['Ctrl + T', 'Convert range to Table', 'रेंज को टेबल में बदलें'],
+  ['Ctrl + Shift + L', 'Toggle filters', 'फ़िल्टर ON/OFF'],
+  ['Ctrl + Shift + Arrow', 'Select to end of block', 'ब्लॉक के अंत तक चुनें'],
+  ['Ctrl + Shift + Enter', 'Array formula entry (legacy)', 'एरे फ़ॉर्मूला दर्ज (पुराना)'],
+  ['Ctrl + ;', 'Insert today\'s date (static)', 'आज की तारीख डालें (स्थिर)'],
+  ['Ctrl + Shift + ;', 'Insert current time (static)', 'अभी का समय डालें'],
+  ['Ctrl + 1', 'Open Format Cells dialog', 'सेल फ़ॉर्मेट डायलॉग'],
+  ['Ctrl + Page Up / Down', 'Switch sheets', 'शीट बदलें'],
+  ['Alt + =', 'AutoSum the column above', 'ऊपर का योग'],
+  ['Alt + F1', 'Insert default chart inline', 'चार्ट डालें'],
+  ['F11', 'Insert chart on a new sheet', 'नई शीट में चार्ट'],
+  ['F2', 'Edit active cell in place', 'सेल संपादित करें'],
+  ['F4', 'Toggle $ on a reference', '$ टॉगल करें'],
+  ['F5 → Special', 'Go-To Special (blanks, formulas, etc.)', 'विशेष पर जाएँ'],
+  ['F9', 'Recalculate now', 'पुनः गणना करें'],
+  ['Ctrl + K', 'Insert hyperlink', 'हाइपरलिंक डालें'],
+  ['Ctrl + N / O / S / W', 'New / Open / Save / Close', 'नया / खोलें / सहेजें / बंद'],
+  ['Ctrl + Z / Y', 'Undo / Redo', 'पूर्ववत् / फिर से करें'],
+  ['Ctrl + Home / End', 'Go to A1 / last used cell', 'A1 / अंतिम सेल पर जाएँ'],
+  ['Ctrl + Space / Shift + Space', 'Select entire column / row', 'पूरा कॉलम / पंक्ति'],
+  ['Ctrl + Shift + + / -', 'Insert / delete row or column', 'पंक्ति/कॉलम जोड़ें/हटाएँ'],
+];
+
+const CHEAT_CHARTS = [
+  ['Vertical Bar', 'Compare totals across categories', 'श्रेणियों के बीच कुल तुलना'],
+  ['Horizontal Bar', 'Rank entities (long labels)', 'सूची क्रम (बड़े लेबल)'],
+  ['Doughnut', 'Share of total (3-8 slices)', 'कुल का अनुपात'],
+  ['Pie', 'Single-series share (3-6 slices)', 'एक श्रृंखला का अनुपात'],
+  ['Stacked Column', 'Time-on-X with category stack', 'समय और श्रेणी एक साथ'],
+  ['Line', 'Continuous trend over time', 'समय के साथ रुझान'],
+  ['Area', 'Trend with magnitude emphasis', 'मात्रा पर ज़ोर'],
+  ['Scatter', 'Correlation between two metrics', 'दो मानों का संबंध'],
+  ['Combo (Bar + Line)', 'Two metrics with different scales', 'दो भिन्न मान'],
+  ['Sparkline', 'Mini chart inside a cell', 'सेल में छोटा चार्ट'],
+];
+
+function buildCheatSheetSheet(title, columns, rows, sst) {
+  // 3-column table: [Formula/Shortcut/Chart][English Description][Hindi Description]
+  const xmlRows = [];
+  // Title row
+  let row = `<row r="1" ht="32" customHeight="1">`;
+  row += `<c r="A1" t="s" s="${S.title}"><v>${sst.add(title)}</v></c>`;
+  for (let c = 1; c < 4; c++) row += `<c r="${cellRef(1, c)}" s="${S.title}"/>`;
+  row += `</row>`;
+  xmlRows.push(row);
+
+  // Header row
+  row = `<row r="2" ht="22" customHeight="1">`;
+  for (let c = 0; c < columns.length; c++) {
+    row += `<c r="${cellRef(2, c)}" t="s" s="${S.subTitle}"><v>${sst.add(columns[c])}</v></c>`;
+  }
+  for (let c = columns.length; c < 4; c++) row += `<c r="${cellRef(2, c)}" s="${S.subTitle}"/>`;
+  row += `</row>`;
+  xmlRows.push(row);
+
+  // Data rows alternating styles
+  for (let i = 0; i < rows.length; i++) {
+    const r = 3 + i;
+    const altStyle = i % 2 === 0 ? S.tutorBody : S.tutorAlt;
+    row = `<row r="${r}" ht="22" customHeight="1">`;
+    for (let c = 0; c < rows[i].length; c++) {
+      const cell = rows[i][c];
+      row += `<c r="${cellRef(r, c)}" t="s" s="${altStyle}"><v>${sst.add(cell)}</v></c>`;
+    }
+    for (let c = rows[i].length; c < 4; c++) row += `<c r="${cellRef(r, c)}" s="${altStyle}"/>`;
+    row += `</row>`;
+    xmlRows.push(row);
+  }
+
+  const cols = `<cols>
+<col min="1" max="1" width="22" customWidth="1"/>
+<col min="2" max="2" width="50" customWidth="1"/>
+<col min="3" max="3" width="42" customWidth="1"/>
+<col min="4" max="4" width="42" customWidth="1"/>
+</cols>`;
+
+  const merges = [`A1:${cellRef(1, columns.length - 1)}`];
+  const mergeXml = `<mergeCells count="${merges.length}">${merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>`;
+
+  return `${XML_HEAD}
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetPr><tabColor rgb="FF22C55E"/></sheetPr>
+<dimension ref="A1:${cellRef(rows.length + 2, columns.length - 1)}"/>
+<sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews>
+<sheetFormatPr defaultRowHeight="22"/>
+${cols}
+<sheetData>${xmlRows.join('\n')}</sheetData>
+${mergeXml}
+</worksheet>`;
+}
+
+function buildCheatSheetXlsx(theme = 'emerald') {
+  const sst = new StringTable();
+  const sheet1 = buildCheatSheetSheet(
+    'YAHAVI · EXCEL FORMULA CHEAT SHEET',
+    ['Function', 'Syntax · Example', 'Description (EN)', 'विवरण (हिंदी)'],
+    CHEAT_FORMULAS.map(([fn, syntax, en, hi]) => [fn, syntax, en, hi]),
+    sst,
+  );
+  const sheet2 = buildCheatSheetSheet(
+    'YAHAVI · KEYBOARD SHORTCUTS',
+    ['Shortcut', 'Action (EN)', 'क्रिया (हिंदी)', ''],
+    CHEAT_SHORTCUTS,
+    sst,
+  );
+  const sheet3 = buildCheatSheetSheet(
+    'YAHAVI · WHICH CHART TO USE',
+    ['Chart Type', 'When to use (EN)', 'कब उपयोग करें (हिंदी)', ''],
+    CHEAT_CHARTS,
+    sst,
+  );
+
+  // Use existing infrastructure but with 3 cheat sheets instead of dashboard
+  const files = {
+    '[Content_Types].xml': `${XML_HEAD}
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+</Types>`,
+    '_rels/.rels': buildRootRels(),
+    'xl/workbook.xml': `${XML_HEAD}
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>
+<sheet name="Formulas" sheetId="1" r:id="rId1"/>
+<sheet name="Shortcuts" sheetId="2" r:id="rId2"/>
+<sheet name="Charts" sheetId="3" r:id="rId3"/>
+</sheets>
+</workbook>`,
+    'xl/_rels/workbook.xml.rels': `${XML_HEAD}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/>
+<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+</Relationships>`,
+    'xl/styles.xml': buildStyles(theme),
+    'xl/sharedStrings.xml': sst.toXml(),
+    'xl/worksheets/sheet1.xml': sheet1,
+    'xl/worksheets/sheet2.xml': sheet2,
+    'xl/worksheets/sheet3.xml': sheet3,
+  };
+  return buildZip(files);
+}
+
+async function handleCheatSheet(request, env) {
+  const url = new URL(request.url);
+  const theme = url.searchParams.get('theme') || 'emerald';
+  const xlsxBytes = buildCheatSheetXlsx(theme);
+  return new Response(xlsxBytes, {
+    headers: {
+      ...CORS_HEADERS,
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="yahavi_excel_cheatsheet.xlsx"`,
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
+}
+
+// ── PRACTICE EXERCISE XLSX ───────────────────────────────────────────────────
+// Generates a practice workbook with realistic raw data and 8 tasks.
+// User fills in formulas, then opens the bundled "Solutions" sheet to compare.
+
+function buildPracticeXlsx(level = 'beginner', theme = 'emerald') {
+  const sst = new StringTable();
+
+  // Sample dataset — Sales by Rep / Region / Month
+  const reps = ['Alice', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank'];
+  const regions = ['North', 'South', 'East', 'West'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+  const products = ['Widget', 'Gadget', 'Gizmo'];
+  const rows = [];
+  let seed = 42;
+  const rand = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed; };
+  for (let i = 0; i < 60; i++) {
+    const rep = reps[rand() % reps.length];
+    const region = regions[rand() % regions.length];
+    const month = months[rand() % months.length];
+    const product = products[rand() % products.length];
+    const qty = 10 + rand() % 50;
+    const price = 100 + rand() % 400;
+    const revenue = qty * price;
+    const cost = Math.floor(revenue * (0.4 + (rand() % 30) / 100));
+    rows.push({ rep, region, month, product, qty, price, revenue, cost });
+  }
+
+  const headers = ['Rep', 'Region', 'Month', 'Product', 'Qty', 'Price', 'Revenue', 'Cost'];
+
+  // ─── DATA SHEET ─────
+  const dataRows = [];
+  let r = `<row r="1">`;
+  for (let c = 0; c < headers.length; c++) r += `<c r="${cellRef(1, c)}" t="s" s="${S.tutorH}"><v>${sst.add(headers[c])}</v></c>`;
+  r += `</row>`;
+  dataRows.push(r);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    r = `<row r="${i + 2}">`;
+    r += `<c r="${cellRef(i + 2, 0)}" t="s"><v>${sst.add(row.rep)}</v></c>`;
+    r += `<c r="${cellRef(i + 2, 1)}" t="s"><v>${sst.add(row.region)}</v></c>`;
+    r += `<c r="${cellRef(i + 2, 2)}" t="s"><v>${sst.add(row.month)}</v></c>`;
+    r += `<c r="${cellRef(i + 2, 3)}" t="s"><v>${sst.add(row.product)}</v></c>`;
+    r += `<c r="${cellRef(i + 2, 4)}"><v>${row.qty}</v></c>`;
+    r += `<c r="${cellRef(i + 2, 5)}"><v>${row.price}</v></c>`;
+    r += `<c r="${cellRef(i + 2, 6)}"><v>${row.revenue}</v></c>`;
+    r += `<c r="${cellRef(i + 2, 7)}"><v>${row.cost}</v></c>`;
+    r += `</row>`;
+    dataRows.push(r);
+  }
+  const dataSheet = `${XML_HEAD}
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<dimension ref="A1:H${rows.length + 1}"/>
+<sheetViews><sheetView workbookViewId="0"/></sheetViews>
+<sheetFormatPr defaultRowHeight="15"/>
+<cols><col min="1" max="8" width="14"/></cols>
+<sheetData>${dataRows.join('\n')}</sheetData>
+</worksheet>`;
+
+  // ─── TASKS SHEET ─────
+  // Format: [Task #][Question (EN)][Question (HI)][Your formula here →][(empty)][Correct formula (in Solutions sheet)]
+  const TASKS = level === 'advanced' ? [
+    ['1', 'Total revenue across all rows', 'सभी पंक्तियों का कुल राजस्व', '=SUM(Data!G2:G61)'],
+    ['2', 'Total revenue for the North region only', 'केवल North क्षेत्र का राजस्व', '=SUMIFS(Data!G:G, Data!B:B, "North")'],
+    ['3', 'Count of unique products', 'अद्वितीय उत्पादों की संख्या', '=ROWS(UNIQUE(Data!D2:D61))'],
+    ['4', 'Highest single-row revenue', 'सबसे ज़्यादा एक पंक्ति का राजस्व', '=MAX(Data!G:G)'],
+    ['5', 'Average revenue per Rep (use UNIQUE+AVERAGEIFS)', 'प्रति Rep औसत राजस्व', '=AVERAGEIFS(Data!G:G, Data!A:A, "Alice")'],
+    ['6', 'Total profit (Revenue − Cost) for Widget product', 'Widget का कुल लाभ', '=SUMIFS(Data!G:G,Data!D:D,"Widget")-SUMIFS(Data!H:H,Data!D:D,"Widget")'],
+    ['7', 'Sorted list of distinct Regions', 'अद्वितीय Regions की सूची', '=SORT(UNIQUE(Data!B2:B61))'],
+    ['8', 'Filter all rows where Region=East AND Qty>30', 'East और Qty>30 वाली पंक्तियाँ', '=FILTER(Data!A2:H61, (Data!B2:B61="East")*(Data!E2:E61>30))'],
+    ['9', 'Use LET to compute profit margin %', 'LET से लाभ मार्जिन %', '=LET(rev,SUM(Data!G:G),cst,SUM(Data!H:H),(rev-cst)/rev)'],
+    ['10', 'Use XLOOKUP to find revenue for "Alice"+"Jan"+"Widget"', '"Alice"+"Jan"+"Widget" का राजस्व', '=SUMIFS(Data!G:G,Data!A:A,"Alice",Data!C:C,"Jan",Data!D:D,"Widget")'],
+  ] : [
+    ['1', 'Total revenue across all rows', 'सभी पंक्तियों का कुल राजस्व', '=SUM(Data!G2:G61)'],
+    ['2', 'Average price across all rows', 'सभी पंक्तियों का औसत मूल्य', '=AVERAGE(Data!F2:F61)'],
+    ['3', 'Count of records', 'कुल रिकॉर्ड', '=COUNTA(Data!A2:A61)'],
+    ['4', 'Highest Qty in any row', 'सबसे ज़्यादा Qty', '=MAX(Data!E:E)'],
+    ['5', 'Total revenue for Rep = "Alice"', 'Alice का कुल राजस्व', '=SUMIFS(Data!G:G,Data!A:A,"Alice")'],
+    ['6', 'Count of rows where Region = "South"', 'South Region की पंक्तियाँ', '=COUNTIFS(Data!B:B,"South")'],
+    ['7', 'XLOOKUP: revenue for the first row of Frank', 'Frank की पहली पंक्ति का राजस्व', '=XLOOKUP("Frank",Data!A:A,Data!G:G)'],
+    ['8', 'List of distinct Months in the data', 'अद्वितीय Months की सूची', '=UNIQUE(Data!C2:C61)'],
+  ];
+
+  const taskRows = [];
+  // Title
+  let row = `<row r="1" ht="34" customHeight="1">`;
+  row += `<c r="A1" t="s" s="${S.title}"><v>${sst.add(`YAHAVI · PRACTICE EXERCISE · ${level.toUpperCase()}`)}</v></c>`;
+  for (let c = 1; c < 8; c++) row += `<c r="${cellRef(1, c)}" s="${S.title}"/>`;
+  row += `</row>`;
+  taskRows.push(row);
+
+  // Instructions
+  row = `<row r="2" ht="24" customHeight="1">`;
+  row += `<c r="A2" t="s" s="${S.tutorTip}"><v>${sst.add('Type your formula in column "Your formula here" — then compare with the Solutions tab.  ·  Hindi: अपना फ़ॉर्मूला "Your formula here" कॉलम में टाइप करें — फिर Solutions टैब से मिलाएँ।')}</v></c>`;
+  for (let c = 1; c < 8; c++) row += `<c r="${cellRef(2, c)}" s="${S.tutorTip}"/>`;
+  row += `</row>`;
+  taskRows.push(row);
+
+  // Header row
+  row = `<row r="3" ht="22" customHeight="1">`;
+  ['#', 'Question (EN)', 'Question (हिंदी)', 'Your formula here'].forEach((h, c) => {
+    row += `<c r="${cellRef(3, c)}" t="s" s="${S.subTitle}"><v>${sst.add(h)}</v></c>`;
+  });
+  for (let c = 4; c < 8; c++) row += `<c r="${cellRef(3, c)}" s="${S.subTitle}"/>`;
+  row += `</row>`;
+  taskRows.push(row);
+
+  // Task rows
+  for (let i = 0; i < TASKS.length; i++) {
+    const r0 = 4 + i;
+    const altStyle = i % 2 === 0 ? S.tutorBody : S.tutorAlt;
+    row = `<row r="${r0}" ht="34" customHeight="1">`;
+    row += `<c r="${cellRef(r0, 0)}" t="s" s="${altStyle}"><v>${sst.add(TASKS[i][0])}</v></c>`;
+    row += `<c r="${cellRef(r0, 1)}" t="s" s="${altStyle}"><v>${sst.add(TASKS[i][1])}</v></c>`;
+    row += `<c r="${cellRef(r0, 2)}" t="s" s="${altStyle}"><v>${sst.add(TASKS[i][2])}</v></c>`;
+    row += `<c r="${cellRef(r0, 3)}" s="${S.tutorCode}"/>`;  // empty cell for user
+    for (let c = 4; c < 8; c++) row += `<c r="${cellRef(r0, c)}" s="${altStyle}"/>`;
+    row += `</row>`;
+    taskRows.push(row);
+  }
+
+  const taskCols = `<cols>
+<col min="1" max="1" width="6" customWidth="1"/>
+<col min="2" max="2" width="45" customWidth="1"/>
+<col min="3" max="3" width="40" customWidth="1"/>
+<col min="4" max="4" width="38" customWidth="1"/>
+</cols>`;
+
+  const taskMerges = ['A1:H1', 'A2:H2'];
+  const taskSheet = `${XML_HEAD}
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetPr><tabColor rgb="FFFFD60A"/></sheetPr>
+<dimension ref="A1:H${TASKS.length + 3}"/>
+<sheetViews><sheetView tabSelected="1" workbookViewId="0" showGridLines="0"/></sheetViews>
+<sheetFormatPr defaultRowHeight="22"/>
+${taskCols}
+<sheetData>${taskRows.join('\n')}</sheetData>
+<mergeCells count="${taskMerges.length}">${taskMerges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>
+</worksheet>`;
+
+  // ─── SOLUTIONS SHEET ─────
+  const solRows = [];
+  let r2 = `<row r="1" ht="32" customHeight="1">`;
+  r2 += `<c r="A1" t="s" s="${S.title}"><v>${sst.add('YAHAVI · SOLUTIONS')}</v></c>`;
+  for (let c = 1; c < 8; c++) r2 += `<c r="${cellRef(1, c)}" s="${S.title}"/>`;
+  r2 += `</row>`;
+  solRows.push(r2);
+
+  r2 = `<row r="2" ht="22" customHeight="1">`;
+  ['#', 'Correct formula', 'Result (live)', ''].forEach((h, c) => {
+    r2 += `<c r="${cellRef(2, c)}" t="s" s="${S.subTitle}"><v>${sst.add(h)}</v></c>`;
+  });
+  for (let c = 4; c < 8; c++) r2 += `<c r="${cellRef(2, c)}" s="${S.subTitle}"/>`;
+  r2 += `</row>`;
+  solRows.push(r2);
+
+  for (let i = 0; i < TASKS.length; i++) {
+    const r0 = 3 + i;
+    const altStyle = i % 2 === 0 ? S.tutorBody : S.tutorAlt;
+    r2 = `<row r="${r0}" ht="32" customHeight="1">`;
+    r2 += `<c r="${cellRef(r0, 0)}" t="s" s="${altStyle}"><v>${sst.add(TASKS[i][0])}</v></c>`;
+    r2 += `<c r="${cellRef(r0, 1)}" t="s" s="${altStyle}"><v>${sst.add(TASKS[i][3])}</v></c>`;
+    // Column C: live formula that computes the answer
+    // Strip the leading "=" — Excel needs it but we write the raw formula text-as-formula
+    const formula = TASKS[i][3].startsWith('=') ? TASKS[i][3].slice(1) : TASKS[i][3];
+    r2 += `<c r="${cellRef(r0, 2)}" s="${altStyle}"><f>${escapeXml(formula)}</f></c>`;
+    for (let c = 3; c < 8; c++) r2 += `<c r="${cellRef(r0, c)}" s="${altStyle}"/>`;
+    r2 += `</row>`;
+    solRows.push(r2);
+  }
+
+  const solSheet = `${XML_HEAD}
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetPr><tabColor rgb="FF22C55E"/></sheetPr>
+<dimension ref="A1:H${TASKS.length + 2}"/>
+<sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews>
+<sheetFormatPr defaultRowHeight="22"/>
+<cols>
+<col min="1" max="1" width="6"/>
+<col min="2" max="2" width="65"/>
+<col min="3" max="3" width="22"/>
+</cols>
+<sheetData>${solRows.join('\n')}</sheetData>
+<mergeCells count="1"><mergeCell ref="A1:H1"/></mergeCells>
+</worksheet>`;
+
+  const files = {
+    '[Content_Types].xml': `${XML_HEAD}
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+</Types>`,
+    '_rels/.rels': buildRootRels(),
+    'xl/workbook.xml': `${XML_HEAD}
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>
+<sheet name="Tasks" sheetId="1" r:id="rId1"/>
+<sheet name="Data" sheetId="2" r:id="rId2"/>
+<sheet name="Solutions" sheetId="3" r:id="rId3"/>
+</sheets>
+</workbook>`,
+    'xl/_rels/workbook.xml.rels': `${XML_HEAD}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/>
+<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+</Relationships>`,
+    'xl/styles.xml': buildStyles(theme),
+    'xl/sharedStrings.xml': sst.toXml(),
+    'xl/worksheets/sheet1.xml': taskSheet,
+    'xl/worksheets/sheet2.xml': dataSheet,
+    'xl/worksheets/sheet3.xml': solSheet,
+  };
+  return buildZip(files);
+}
+
+async function handlePracticeExercise(request, env) {
+  const url = new URL(request.url);
+  const level = url.searchParams.get('level') || 'beginner';
+  const theme = url.searchParams.get('theme') || 'emerald';
+  const xlsxBytes = buildPracticeXlsx(level, theme);
+  return new Response(xlsxBytes, {
+    headers: {
+      ...CORS_HEADERS,
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="yahavi_practice_${level}.xlsx"`,
+      'Cache-Control': 'public, max-age=600',
+    },
+  });
+}
+
+// ── DAILY TIP ─────────────────────────────────────────────────────────────────
+const DAILY_TIPS = [
+  { en: 'Press Ctrl + T to convert any range to a Table — your charts will auto-extend forever.', hi: 'किसी भी रेंज को टेबल बनाने के लिए Ctrl + T दबाएँ — आपके चार्ट हमेशा अपडेट रहेंगे।' },
+  { en: 'F4 inside a formula toggles $ on a reference — fastest way to lock cells.', hi: 'फ़ॉर्मूला में F4 दबाने से $ टॉगल होता है — सेल लॉक करने का सबसे तेज़ तरीका।' },
+  { en: 'Use XLOOKUP\'s 4th argument to set a friendly "Not Found" message.', hi: 'XLOOKUP के 4थे आर्ग्युमेंट से "Not Found" मेसेज सेट करें।' },
+  { en: 'SUMIFS uses logical AND — every criteria must match. For OR logic, sum two SUMIFS.', hi: 'SUMIFS में सभी शर्तें मिलनी चाहिए। OR के लिए दो SUMIFS जोड़ें।' },
+  { en: 'Ctrl + Shift + Arrow selects to the end of a contiguous block — pair with Ctrl+C for a fast copy.', hi: 'Ctrl + Shift + Arrow ब्लॉक के अंत तक चुनता है — Ctrl+C के साथ इस्तेमाल करें।' },
+  { en: 'UNIQUE + SORT + FILTER are the modern trio that replaces 80% of pivot work.', hi: 'UNIQUE + SORT + FILTER — पिवट का 80% काम इनसे हो जाता है।' },
+  { en: 'IFERROR makes dashboards production-grade — never show #DIV/0! or #N/A to your boss.', hi: 'IFERROR से डैशबोर्ड साफ़ रहता है — #DIV/0! या #N/A कभी न दिखाएँ।' },
+  { en: 'Use =TEXT(value, "$#,##0.0,,\"M\"") to format big numbers as $1.3M.', hi: 'बड़ी संख्याओं को $1.3M जैसे फ़ॉर्मेट के लिए =TEXT() का प्रयोग करें।' },
+  { en: 'Ctrl + ; inserts today as a hard value. =TODAY() updates every day — use the right one.', hi: 'Ctrl + ; आज की तारीख स्थिर डालता है। =TODAY() रोज़ बदलता है।' },
+  { en: 'Tables (Ctrl + T) give you @-references like [@Revenue] — much cleaner than $G$2:$G$1000.', hi: 'टेबल्स [@Revenue] जैसे रेफरेन्स देती हैं — $G$2:$G$1000 से बेहतर।' },
+];
+
+async function handleDailyTip(request, env) {
+  const url = new URL(request.url);
+  const lang = url.searchParams.get('lang') || 'en';
+  const date = new Date().toISOString().slice(0, 10);
+  // Deterministic daily pick — same tip per UTC day
+  const hash = [...date].reduce((a, c) => ((a << 5) - a) + c.charCodeAt(0), 0);
+  const tip = DAILY_TIPS[Math.abs(hash) % DAILY_TIPS.length];
+  return jsonResponse({ date, lang, en: tip.en, hi: tip.hi, text: lang === 'hi' ? tip.hi : tip.en });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -1773,8 +3031,20 @@ export default {
       if (path === '/api/themes') return jsonResponse({ themes: THEMES });
       if (path === '/api/upload' && request.method === 'POST') return await handleUpload(request, env);
       if (path === '/api/generate' && request.method === 'POST') return await handleGenerate(request, env);
+      if (path === '/api/teach' && request.method === 'POST') return await handleTeach(request, env);
+      if (parts[0] === 'api' && parts[1] === 'teach' && parts[2] === 'history' && parts.length === 4 && request.method === 'GET') return await handleTeachHistory(request, env, ['api','teach', parts[3]]);
+      if (parts[0] === 'api' && parts[1] === 'teach' && parts[2] === 'progress' && request.method === 'GET') return await handleProgress(request, env, parts);
+      if (path === '/api/teach/quiz' && request.method === 'POST') return await handleQuizStart(request, env);
+      if (path === '/api/teach/quiz/submit' && request.method === 'POST') return await handleQuizSubmit(request, env);
+      if (path === '/api/teach/cheatsheet' && request.method === 'GET') return await handleCheatSheet(request, env);
+      if (path === '/api/teach/practice' && request.method === 'GET') return await handlePracticeExercise(request, env);
+      if (path === '/api/teach/tip' && request.method === 'GET') return await handleDailyTip(request, env);
+      // legacy GET /api/teach/:sid — keep for backwards compat
+      if (parts[0] === 'api' && parts[1] === 'teach' && parts.length === 3 && request.method === 'GET' && !['quiz', 'cheatsheet', 'practice', 'tip', 'progress', 'history'].includes(parts[2])) {
+        return await handleTeachHistory(request, env, parts);
+      }
       if (parts[0] === 'api' && parts[1] === 'download') return await handleFileDownload(request, env, parts);
-      if (path === '/' || path === '/health') return jsonResponse({ status: 'ok', version: '3.0', features: ['xlsx', 'charts', 'tutor', 'deterministic-70-30'] });
+      if (path === '/' || path === '/health') return jsonResponse({ status: 'ok', version: '3.2', features: ['xlsx', 'charts', 'tutor', 'deterministic-70-30', 'teacher-chat', 'progress', 'quiz', 'cheatsheet', 'practice-xlsx', 'bilingual-hi-en'] });
       return errorResponse('Not found', 404);
     } catch (e) {
       console.error(e);
