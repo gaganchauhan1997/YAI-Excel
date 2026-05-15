@@ -39,7 +39,6 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchThemes().then(setThemes).catch(() => {});
     setApiKeys(loadKeys());
-    // Show key panel on first visit if no keys saved
     const hasKeys = !!localStorage.getItem(LS_GROQ) || !!localStorage.getItem(LS_GEMINI);
     if (!hasKeys) setShowKeys(true);
   }, []);
@@ -55,10 +54,14 @@ export default function DashboardPage() {
     if (busy) return;
     const currentKeys = loadKeys();
 
+    // If the user attached an image (dashboard reference), it's sent as the "image" field;
+    // CSV/data file goes as "data". The user's text is the prompt.
+    const isImage = file && /^image\//.test(file.type);
+
     const userMsg: Message = {
       id: `u-${Date.now()}`,
       kind: "user",
-      text: text || (file ? `Build dashboard from ${file.name}` : ""),
+      text: text || (file ? `Build dashboard from ${file.name}${isImage ? " (image reference)" : ""}` : ""),
       file: file?.name,
     };
     const thinkingId = `t-${Date.now()}`;
@@ -80,10 +83,12 @@ export default function DashboardPage() {
 
     try {
       const fd = new FormData();
-      if (file) fd.append("file", file);
+      if (file) {
+        if (isImage) fd.append("image", file);
+        else fd.append("data", file);
+      }
       if (text) fd.append("text", text);
 
-      // Upload with user API keys
       const up = await upload(fd, currentKeys);
 
       setMessages((m) =>
@@ -98,21 +103,14 @@ export default function DashboardPage() {
         ? (text ? `${text}\n\n(Format all monetary values in Indian Rupees with lakhs/crores grouping.)` : "Indian Rupee formatting with lakhs/crores grouping.")
         : text;
 
-      // Generate with keys + output both
-      const result = await generate(up.token, theme, "enhance", promptHint, currentKeys, "both");
+      const result = await generate(up.token, theme, "enhance", promptHint, currentKeys);
       clearInterval(tick);
-
-      // Determine HTML and Excel URLs
-      const htmlUrl = result.html?.download_url || (result.filename?.endsWith(".html") ? result.download_url : "");
-      const excelUrl = result.excel?.download_url || (result.filename?.endsWith(".xls") ? result.download_url : "");
 
       const resultMsg: Message = {
         id: `r-${Date.now()}`,
         kind: "result",
         filename: result.spec?.title || result.filename || "Dashboard",
         downloadUrl: result.download_url,
-        htmlUrl,
-        excelUrl,
         theme: result.theme,
         spec: result.spec,
         audit: result.audit,
@@ -132,7 +130,6 @@ export default function DashboardPage() {
     } catch (e: unknown) {
       clearInterval(tick);
       const errorText = e instanceof Error ? e.message : String(e);
-      // If no API key error, prompt user to add keys
       const needsKey = errorText.toLowerCase().includes("api key") || errorText.toLowerCase().includes("401") || errorText.toLowerCase().includes("quota");
       setMessages((m) =>
         m.map((msg) =>
@@ -169,8 +166,6 @@ export default function DashboardPage() {
         kind: "result",
         filename: it.filename || "",
         downloadUrl: it.downloadUrl || "",
-        htmlUrl: it.downloadUrl?.endsWith(".html") ? it.downloadUrl : "",
-        excelUrl: it.downloadUrl?.endsWith(".xls") ? it.downloadUrl : "",
         theme: it.theme,
         audit: undefined,
       },

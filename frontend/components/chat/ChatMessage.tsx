@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { Download, FileSpreadsheet, Globe, CheckCircle2, AlertCircle, Loader2, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { Download, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import NeoPill from "@/components/neo/NeoPill";
 import NeoButton from "@/components/neo/NeoButton";
@@ -16,8 +15,6 @@ export type Message =
       kind: "result";
       filename: string;
       downloadUrl: string;
-      htmlUrl?: string;
-      excelUrl?: string;
       theme: string;
       spec?: {
         title?: string;
@@ -32,40 +29,6 @@ export type Message =
         enhancement_suggestions?: { description: string; priority: string }[];
       };
     };
-
-function DashboardPreview({ htmlUrl }: { htmlUrl: string }) {
-  const [expanded, setExpanded] = useState(false);
-
-  if (!htmlUrl) return null;
-
-  return (
-    <div className="mt-4">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 text-sm font-mono text-accent hover:underline"
-      >
-        {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        {expanded ? "Hide preview" : "Preview dashboard"}
-      </button>
-      {expanded && (
-        <div className="mt-3 border-[3px] border-ink" style={{ boxShadow: "4px 4px 0 0 #000" }}>
-          <div className="bg-ink text-snow text-xs font-mono px-3 py-1.5 flex items-center justify-between">
-            <span>📊 {htmlUrl.split("/").pop()}</span>
-            <a href={htmlUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-accent">
-              Open full <ExternalLink size={10} />
-            </a>
-          </div>
-          <iframe
-            src={htmlUrl}
-            className="w-full"
-            style={{ height: "520px", border: "none", display: "block" }}
-            title="Dashboard Preview"
-          />
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function ChatMessage({ msg }: { msg: Message }) {
   const { t } = useI18n();
@@ -120,7 +83,7 @@ export default function ChatMessage({ msg }: { msg: Message }) {
     );
   }
 
-  // result
+  // result — XLSX only (Worker v3.0 removed HTML output)
   const displayTitle = msg.spec?.title || msg.filename || "Dashboard";
   const domain = msg.spec?.domain || msg.audit?.domain;
   const confidence = msg.audit?.confidence;
@@ -129,7 +92,6 @@ export default function ChatMessage({ msg }: { msg: Message }) {
 
   return (
     <div className="msg-result">
-      {/* Header row */}
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-primary border-[3px] border-ink shadow-neo-sm flex items-center justify-center">
@@ -141,33 +103,17 @@ export default function ChatMessage({ msg }: { msg: Message }) {
           </div>
         </div>
 
-        {/* Download buttons */}
         <div className="flex gap-2 flex-wrap">
-          {msg.htmlUrl && (
-            <a href={msg.htmlUrl} target="_blank" rel="noopener noreferrer">
-              <NeoButton size="sm" variant="primary">
-                <Globe size={14} /> HTML Dashboard
-              </NeoButton>
-            </a>
-          )}
-          {msg.excelUrl && (
-            <a href={msg.excelUrl} download>
-              <NeoButton size="sm">
-                <Download size={14} /> Excel
-              </NeoButton>
-            </a>
-          )}
-          {!msg.htmlUrl && !msg.excelUrl && msg.downloadUrl && (
+          {msg.downloadUrl && (
             <a href={msg.downloadUrl} download>
-              <NeoButton size="sm">
-                <Download size={14} /> {t.studio.open}
+              <NeoButton size="sm" variant="primary">
+                <Download size={14} /> Excel Dashboard (.xlsx)
               </NeoButton>
             </a>
           )}
         </div>
       </div>
 
-      {/* Stats pills */}
       <div className="flex flex-wrap gap-2 mb-3">
         {domain && <NeoPill variant="primary">📊 {domain}</NeoPill>}
         {typeof confidence === "number" && (
@@ -181,24 +127,18 @@ export default function ChatMessage({ msg }: { msg: Message }) {
         {typeof chartCount === "number" && chartCount > 0 && (
           <NeoPill variant="dark">{chartCount} charts</NeoPill>
         )}
+        <NeoPill variant="snow">+ Excel Tutor sheet 🎓</NeoPill>
       </div>
 
-      {/* Inline HTML Dashboard Preview */}
-      {msg.htmlUrl && <DashboardPreview htmlUrl={msg.htmlUrl} />}
+      <div className="text-sm text-muted mt-3 border-t-[3px] border-ink pt-3">
+        <div className="font-mono text-[11px] uppercase tracking-widest mb-2">What is inside this workbook</div>
+        <ul className="space-y-1.5 list-disc list-inside">
+          <li><b>Dashboard</b> — title banner, 5 tabs, {kpiCount || 5} KPI cards, {chartCount || 4} charts, 3 left + 3 right filter panels, timeline trend, footer</li>
+          <li><b>Data</b> — every raw row so you can verify, re-pivot, or build your own slices</li>
+          <li><b>Excel Tutor</b> — 8 lessons (SUM, SUMIFS, XLOOKUP, INDEX/MATCH, UNIQUE, SORT, FILTER, formatting, shortcuts) using <i>your</i> columns so you can rebuild the dashboard yourself</li>
+        </ul>
+      </div>
 
-      {/* Audit counts (legacy) */}
-      {msg.audit?.counts && (
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3 border-t-[3px] border-ink pt-4">
-          {Object.entries(msg.audit.counts).map(([k, v]) => (
-            <div key={k} className="border-[3px] border-ink p-2 shadow-neo-sm bg-paper">
-              <div className="text-[9px] font-mono uppercase text-muted tracking-wider">{k.replace(/_/g, " ")}</div>
-              <div className="font-display text-lg leading-none mt-1">{v}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Enhancement suggestions */}
       {msg.audit?.enhancement_suggestions?.length ? (
         <div className="mt-3 border-t-[3px] border-ink pt-3">
           <div className="text-[11px] font-mono uppercase text-muted mb-2 tracking-widest">Suggestions</div>
