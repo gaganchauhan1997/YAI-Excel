@@ -1,0 +1,18 @@
+THEME = {
+    "name": "violet",
+    "label": "Violet — Purple + Lavender",
+    "header_bg": "2D1B69",
+    "header_fg": "FFFFFF",
+    "accent1": "A78BFA",
+    "accent2": "DDD6FE",
+    "row_alt": "F5F3FF",
+    "border_color": "2D1B69",
+    "kpi_bg": "2D1B69",
+    "kpi_fg": "FFFFFF",
+    "kpi_trend_up": "10B981",
+    "kpi_trend_down": "F87171",
+    "chart_colors": ["2D1B69", "A78BFA", "8B5CF6", "7C3AED", "6D28D9", "5B21B6", "C4B5FD", "EDE9FE"],
+    "font_name": "Calibri",
+    "tab_color": "2D1B69",
+    "sheet_bg": "FFFFFF",
+}

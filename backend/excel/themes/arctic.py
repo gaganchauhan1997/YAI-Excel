@@ -1,0 +1,18 @@
+THEME = {
+    "name": "arctic",
+    "label": "Arctic — White + Ice Blue",
+    "header_bg": "FFFFFF",
+    "header_fg": "1E3A8A",
+    "accent1": "BFDBFE",
+    "accent2": "DBEAFE",
+    "row_alt": "F0F9FF",
+    "border_color": "BFDBFE",
+    "kpi_bg": "DBEAFE",
+    "kpi_fg": "1E3A8A",
+    "kpi_trend_up": "10B981",
+    "kpi_trend_down": "EF4444",
+    "chart_colors": ["1E3A8A", "3B82F6", "60A5FA", "93C5FD", "BFDBFE", "DBEAFE", "0EA5E9", "0284C7"],
+    "font_name": "Calibri",
+    "tab_color": "BFDBFE",
+    "sheet_bg": "FFFFFF",
+}

@@ -1,0 +1,18 @@
+THEME = {
+    "name": "amber",
+    "label": "Amber — Brown + Gold",
+    "header_bg": "3D1F00",
+    "header_fg": "FFFFFF",
+    "accent1": "F59E0B",
+    "accent2": "FDE68A",
+    "row_alt": "FFFBEB",
+    "border_color": "3D1F00",
+    "kpi_bg": "3D1F00",
+    "kpi_fg": "FBBF24",
+    "kpi_trend_up": "65A30D",
+    "kpi_trend_down": "DC2626",
+    "chart_colors": ["3D1F00", "F59E0B", "FBBF24", "D97706", "B45309", "92400E", "78350F", "451A03"],
+    "font_name": "Calibri",
+    "tab_color": "3D1F00",
+    "sheet_bg": "FFFFFF",
+}

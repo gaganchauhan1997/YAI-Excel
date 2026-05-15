@@ -1,0 +1,21 @@
+{
+  "name": "yai-excel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Give us anything. Get a dashboard. — Universal AI Excel Dashboard Generator.",
+  "license": "MIT",
+  "author": "Gagan Chauhan <gagan@hackknow.com>",
+  "homepage": "https://github.com/gaganchauhan1997/YAI-Excel",
+  "workspaces": ["frontend"],
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd frontend && npm run start",
+    "backend": "cd backend && uvicorn main:app --reload --port 8000",
+    "docker:up": "docker-compose up --build",
+    "docker:down": "docker-compose down"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

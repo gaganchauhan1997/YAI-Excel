@@ -1,0 +1,18 @@
+THEME = {
+    "name": "ocean",
+    "label": "Ocean — Teal + Cyan",
+    "header_bg": "0F4C5C",
+    "header_fg": "FFFFFF",
+    "accent1": "22D3EE",
+    "accent2": "67E8F9",
+    "row_alt": "ECFEFF",
+    "border_color": "0F4C5C",
+    "kpi_bg": "0F4C5C",
+    "kpi_fg": "FFFFFF",
+    "kpi_trend_up": "10B981",
+    "kpi_trend_down": "EF4444",
+    "chart_colors": ["0F4C5C", "22D3EE", "06B6D4", "0891B2", "0E7490", "155E75", "164E63", "083344"],
+    "font_name": "Calibri",
+    "tab_color": "0F4C5C",
+    "sheet_bg": "FFFFFF",
+}

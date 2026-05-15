@@ -1,0 +1,18 @@
+THEME = {
+    "name": "emerald",
+    "label": "Emerald — Dark Green + Lime",
+    "header_bg": "1A3C2E",
+    "header_fg": "FFFFFF",
+    "accent1": "70AD47",
+    "accent2": "A7F3D0",
+    "row_alt": "F0FDF4",
+    "border_color": "1A3C2E",
+    "kpi_bg": "1A3C2E",
+    "kpi_fg": "FFFFFF",
+    "kpi_trend_up": "16A34A",
+    "kpi_trend_down": "DC2626",
+    "chart_colors": ["1A3C2E", "70AD47", "A7F3D0", "059669", "65A30D", "84CC16", "14B8A6", "475569"],
+    "font_name": "Calibri",
+    "tab_color": "1A3C2E",
+    "sheet_bg": "FFFFFF",
+}

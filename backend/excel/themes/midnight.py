@@ -1,0 +1,18 @@
+THEME = {
+    "name": "midnight",
+    "label": "Midnight — Navy + Gold",
+    "header_bg": "1E3A5F",
+    "header_fg": "FFFFFF",
+    "accent1": "FFC000",
+    "accent2": "63B3ED",
+    "row_alt": "F4F7FB",
+    "border_color": "1E3A5F",
+    "kpi_bg": "1E3A5F",
+    "kpi_fg": "FFFFFF",
+    "kpi_trend_up": "16A34A",
+    "kpi_trend_down": "DC2626",
+    "chart_colors": ["1E3A5F", "FFC000", "63B3ED", "F97316", "10B981", "8B5CF6", "EC4899", "94A3B8"],
+    "font_name": "Calibri",
+    "tab_color": "1E3A5F",
+    "sheet_bg": "FFFFFF",
+}

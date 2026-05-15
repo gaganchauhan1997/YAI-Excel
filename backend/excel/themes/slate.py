@@ -1,0 +1,18 @@
+THEME = {
+    "name": "slate",
+    "label": "Slate — Grey + Blue",
+    "header_bg": "2D3748",
+    "header_fg": "FFFFFF",
+    "accent1": "63B3ED",
+    "accent2": "A0AEC0",
+    "row_alt": "F7FAFC",
+    "border_color": "2D3748",
+    "kpi_bg": "2D3748",
+    "kpi_fg": "FFFFFF",
+    "kpi_trend_up": "38B2AC",
+    "kpi_trend_down": "E53E3E",
+    "chart_colors": ["2D3748", "63B3ED", "4FD1C5", "9F7AEA", "F6AD55", "FC8181", "68D391", "A0AEC0"],
+    "font_name": "Calibri",
+    "tab_color": "2D3748",
+    "sheet_bg": "FFFFFF",
+}

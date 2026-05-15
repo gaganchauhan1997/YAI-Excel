@@ -1,0 +1,18 @@
+THEME = {
+    "name": "crimson",
+    "label": "Crimson — Deep Red + White",
+    "header_bg": "7B0000",
+    "header_fg": "FFFFFF",
+    "accent1": "FFFFFF",
+    "accent2": "FBBF24",
+    "row_alt": "FEF2F2",
+    "border_color": "7B0000",
+    "kpi_bg": "7B0000",
+    "kpi_fg": "FFFFFF",
+    "kpi_trend_up": "16A34A",
+    "kpi_trend_down": "FCA5A5",
+    "chart_colors": ["7B0000", "FBBF24", "F87171", "FB923C", "F472B6", "A78BFA", "60A5FA", "94A3B8"],
+    "font_name": "Calibri",
+    "tab_color": "7B0000",
+    "sheet_bg": "FFFFFF",
+}

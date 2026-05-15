@@ -1,0 +1,18 @@
+THEME = {
+    "name": "rose",
+    "label": "Rose — Dusty Rose + Cream",
+    "header_bg": "7C3048",
+    "header_fg": "FDF2F8",
+    "accent1": "FDF2F8",
+    "accent2": "FBCFE8",
+    "row_alt": "FFF1F2",
+    "border_color": "7C3048",
+    "kpi_bg": "7C3048",
+    "kpi_fg": "FDF2F8",
+    "kpi_trend_up": "10B981",
+    "kpi_trend_down": "F87171",
+    "chart_colors": ["7C3048", "F472B6", "FBCFE8", "EC4899", "DB2777", "BE185D", "9D174D", "831843"],
+    "font_name": "Calibri",
+    "tab_color": "7C3048",
+    "sheet_bg": "FFFFFF",
+}

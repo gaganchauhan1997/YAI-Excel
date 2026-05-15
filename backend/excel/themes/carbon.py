@@ -1,0 +1,18 @@
+THEME = {
+    "name": "carbon",
+    "label": "Carbon — Black + Terminal Green",
+    "header_bg": "0A0A0A",
+    "header_fg": "00FF41",
+    "accent1": "00FF41",
+    "accent2": "1AFF66",
+    "row_alt": "111111",
+    "border_color": "00FF41",
+    "kpi_bg": "0A0A0A",
+    "kpi_fg": "00FF41",
+    "kpi_trend_up": "00FF41",
+    "kpi_trend_down": "FF4444",
+    "chart_colors": ["00FF41", "1AFF66", "33FF99", "66FFCC", "00CC33", "009926", "FFFFFF", "888888"],
+    "font_name": "Consolas",
+    "tab_color": "0A0A0A",
+    "sheet_bg": "0A0A0A",
+}
