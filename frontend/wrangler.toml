@@ -1,11 +1,8 @@
-# Cloudflare Pages config (used by wrangler CLI / `wrangler pages deploy`).
-# Project name on Cloudflare can be anything — `yai-excel` keeps it tidy.
-
+# Cloudflare Pages config
 name = "yai-excel"
 compatibility_date = "2026-05-01"
 pages_build_output_dir = "out"
+build_command = "npm install --legacy-peer-deps && npm run build"
 
 [vars]
-# Public, build-time variable. Override per-environment in the Cloudflare
-# dashboard if you don't want to commit your API URL here.
 NEXT_PUBLIC_API_URL = "https://api.yexcel.hackknow.com"
