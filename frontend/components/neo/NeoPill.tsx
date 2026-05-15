@@ -7,10 +7,12 @@ export default function NeoPill({
   children,
   variant = "snow",
   className,
+  onClick,
 }: {
   children: ReactNode;
   variant?: "snow" | "dark" | "primary" | "pink" | "blue";
   className?: string;
+  onClick?: () => void;
 }) {
   const variants: Record<string, string> = {
     snow: "bg-snow",
@@ -20,6 +22,11 @@ export default function NeoPill({
     blue: "bg-accent text-snow",
   };
   return (
-    <span className={clsx("neo-pill", variants[variant], className)}>{children}</span>
+    <span
+      className={clsx("neo-pill", variants[variant], className, onClick && "cursor-pointer")}
+      onClick={onClick}
+    >
+      {children}
+    </span>
   );
 }
