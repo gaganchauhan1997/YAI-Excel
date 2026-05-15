@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: yai-excel-api
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: "https://yexcel.hackknow.com,http://localhost:3000"
+      - key: RATE_LIMIT
+        value: "120/minute"
+      - key: STORAGE_PATH
+        value: "/tmp/uploads"
+      - key: OUTPUT_PATH
+        value: "/tmp/outputs"
+    healthCheckPath: /healthz

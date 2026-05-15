@@ -1,29 +1,22 @@
-name: deploy-backend
+name: Deploy Backend → Render.com
 
 on:
   push:
     branches: [main]
     paths:
-      - "backend/**"
-      - ".github/workflows/deploy-backend.yml"
+      - 'backend/**'
+      - 'render.yaml'
   workflow_dispatch:
 
-# Required secret (Settings → Secrets and variables → Actions):
-#   FLY_API_TOKEN  – generated with `fly auth token`
-
-concurrency:
-  group: deploy-backend-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  deploy:
-    name: Deploy to Fly.io (Mumbai)
+  trigger-render:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Deploy
-        working-directory: backend
-        run: flyctl deploy --remote-only
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Trigger Render deploy hook
+        run: |
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK }}" ]; then
+            curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+            echo "Render deploy triggered."
+          else
+            echo "RENDER_DEPLOY_HOOK not set — Render auto-deploys from GitHub directly."
+          fi
